@@ -9,7 +9,7 @@ import { Loader2 } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
-import { SerperOrganicResult, PerplexityResponse, ProcessedResults } from '../types/api'
+import { SerperOrganicResult, PerplexityResponse } from '../types/api'
 import Image from 'next/image'
 
 // Define SerperImageResult type
@@ -20,22 +20,14 @@ interface SerperImageResult {
   link: string
 }
 
-// Rate limiting configuration for Standard plan
-const RATE_LIMIT = {
-  SCRAPE_REQUESTS_PER_MINUTE: 100,
-  MIN_DELAY_BETWEEN_REQUESTS: 600, // 600ms = 100 requests per minute
-}
-
-interface Entry {
-  id: string
-  name: string
-  company: string
-  result?: string | null // Allow null
-  perplexityResult?: PerplexityResponse | null // Allow null
-  profileImage?: string | null  // Allow null
-  linkedinUrl?: string | null  // Allow null
-  combinedData?: {
-    name: string // Add name field
+// Define our own ProcessedResults type
+interface ProcessedResults {
+  rocketreach?: string | null
+  perplexity?: PerplexityResponse | null
+  profileImage?: string | null
+  linkedin?: string | null
+  openai?: {
+    name: string
     profilePhoto: string
     linkedinURL: string
     currentRole: string
@@ -48,7 +40,38 @@ interface Entry {
       highlights: string[]
     }[]
     expertiseAreas: string[]
-  }
+  } | null
+}
+
+// Rate limiting configuration for Standard plan
+const RATE_LIMIT = {
+  SCRAPE_REQUESTS_PER_MINUTE: 100,
+  MIN_DELAY_BETWEEN_REQUESTS: 600, // 600ms = 100 requests per minute
+}
+
+interface Entry {
+  id: string
+  name: string
+  company: string
+  result?: string | null
+  perplexityResult?: PerplexityResponse | null
+  profileImage?: string | null
+  linkedinUrl?: string | null
+  combinedData?: {
+    name: string
+    profilePhoto: string
+    linkedinURL: string
+    currentRole: string
+    keyAchievements: string[]
+    professionalBackground: string
+    careerHistory: {
+      title: string
+      company: string
+      duration: string
+      highlights: string[]
+    }[]
+    expertiseAreas: string[]
+  } | null
   status: {
     rocketreach: 'pending' | 'processing' | 'completed' | 'error'
     perplexity: 'pending' | 'processing' | 'completed' | 'error'
@@ -63,7 +86,6 @@ interface Entry {
     linkedin?: string
     openai?: string
   }
-  // Add these fields to control which APIs to run
   runRocketReach: boolean
   runPerplexity: boolean
   runProfileImage: boolean
@@ -272,7 +294,7 @@ export default function DragDropArea() {
 
       // Second batch: Run Serper APIs in sequence (they're quick)
       const serperPromises = []
-      const serperPromiseTypes = []
+      const serperPromiseTypes: ('serper')[] = []
       
       if (entry.runProfileImage || entry.runLinkedin) {
         const serperCalls = async () => {
@@ -379,9 +401,9 @@ export default function DragDropArea() {
       })
 
       // Process Serper results
-      serperResults.forEach((result) => {
+      serperResults.forEach(result => {
         if (result.status === 'fulfilled') {
-          const serperData = result.value
+          const serperData = result.value as ProcessedResults
           if (serperData.profileImage) {
             processedResults.profileImage = serperData.profileImage
           }
@@ -616,13 +638,10 @@ export default function DragDropArea() {
       const content = responseData.choices[0].message.content
 
       try {
-        // First try direct JSON parse
         return JSON.parse(content)
       } catch {
-        // If direct parse fails, try to extract JSON from markdown
         console.log('Direct JSON parse failed, trying to extract from markdown...')
         
-        // Look for JSON between triple backticks
         const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
         if (jsonMatch) {
           try {
@@ -633,7 +652,6 @@ export default function DragDropArea() {
           }
         }
 
-        // If no markdown format, try to find any JSON-like structure
         const possibleJson = content.match(/\{[\s\S]*\}/)
         if (possibleJson) {
           try {
@@ -644,11 +662,9 @@ export default function DragDropArea() {
           }
         }
 
-        // If all parsing attempts fail
         console.error('Failed to parse response:', content)
         throw new Error('Could not extract valid JSON from response')
       }
-
     } catch (error) {
       console.error('Error in processPerplexity:', error)
       setEntries(current =>
@@ -834,6 +850,7 @@ export default function DragDropArea() {
                               className="w-10 h-10 rounded-full object-cover"
                               width={40}
                               height={40}
+                              unoptimized
                             />
                           )}
                           <div>
