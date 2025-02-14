@@ -2,8 +2,21 @@
 
 import { useState, useEffect } from 'react'
 
+interface TestResult {
+  success: boolean
+  status: number
+  statusText: string
+  headers: Record<string, string>
+  apiKeyInfo: {
+    length?: number
+    prefix?: string
+    format: string
+  }
+  response: unknown
+}
+
 export default function TestPage() {
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<TestResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 

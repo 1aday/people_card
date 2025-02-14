@@ -54,7 +54,7 @@ async function testPerplexity() {
     let responseData
     try {
       responseData = JSON.parse(responseText)
-    } catch (e) {
+    } catch {
       responseData = responseText
     }
 
@@ -71,15 +71,7 @@ async function testPerplexity() {
       response: responseData
     })
   } catch (error) {
-    console.error('Test Error:', error)
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      apiKeyInfo: {
-        length: apiKey?.length,
-        prefix: apiKey?.slice(0, 5),
-        format: apiKey?.match(/^pplx-[a-f0-9]{40}$/) ? 'valid' : 'invalid'
-      }
-    })
+    console.error('Error:', error)
+    return new Response('Error testing API key', { status: 500 })
   }
 } 

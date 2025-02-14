@@ -9,7 +9,16 @@ import { Loader2 } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
+import { SerperOrganicResult, PerplexityResponse, ProcessedResults } from '../types/api'
 import Image from 'next/image'
+
+// Define SerperImageResult type
+interface SerperImageResult {
+  imageUrl: string
+  imageWidth: number
+  imageHeight: number
+  link: string
+}
 
 // Rate limiting configuration for Standard plan
 const RATE_LIMIT = {
@@ -21,11 +30,25 @@ interface Entry {
   id: string
   name: string
   company: string
-  result?: string
-  perplexityResult?: PerplexityResult
-  profileImage?: string
-  linkedinUrl?: string
-  combinedData?: CombinedData
+  result?: string | null // Allow null
+  perplexityResult?: PerplexityResponse | null // Allow null
+  profileImage?: string | null  // Allow null
+  linkedinUrl?: string | null  // Allow null
+  combinedData?: {
+    name: string // Add name field
+    profilePhoto: string
+    linkedinURL: string
+    currentRole: string
+    keyAchievements: string[]
+    professionalBackground: string
+    careerHistory: {
+      title: string
+      company: string
+      duration: string
+      highlights: string[]
+    }[]
+    expertiseAreas: string[]
+  }
   status: {
     rocketreach: 'pending' | 'processing' | 'completed' | 'error'
     perplexity: 'pending' | 'processing' | 'completed' | 'error'
@@ -40,52 +63,12 @@ interface Entry {
     linkedin?: string
     openai?: string
   }
+  // Add these fields to control which APIs to run
   runRocketReach: boolean
   runPerplexity: boolean
   runProfileImage: boolean
   runLinkedin: boolean
   runOpenAI: boolean
-}
-
-interface PerplexityResult {
-  currentRole?: string
-  keyAchievements?: string[]
-  professionalBackground?: string
-  careerHistory?: Array<{
-    title: string
-    company: string
-    duration: string
-    highlights: string[]
-  }>
-  expertiseAreas?: string[]
-}
-
-interface CombinedData {
-  name: string
-  profilePhoto: string
-  linkedinURL: string
-  currentRole: string
-  keyAchievements: string[]
-  professionalBackground: string
-  careerHistory: Array<{
-    title: string
-    company: string
-    duration: string
-    highlights: string[]
-  }>
-  expertiseAreas: string[]
-}
-
-interface SerperImage {
-  imageUrl: string
-  imageWidth: number
-  imageHeight: number
-  link: string
-}
-
-interface SerperResult {
-  link: string
-  snippet: string
 }
 
 export default function DragDropArea() {
@@ -190,7 +173,7 @@ export default function DragDropArea() {
       const data = await response.json();
       
       // Find the first image that looks like a profile picture
-      const profileImage = data.images?.find((image: SerperImage) => {
+      const profileImage = data.images?.find((image: SerperImageResult) => {
         const isSquare = image.imageWidth === image.imageHeight;
         const hasProfileKeyword = image.imageUrl.toLowerCase().includes('profile') || 
                                  image.link.toLowerCase().includes('linkedin');
@@ -203,7 +186,7 @@ export default function DragDropArea() {
 
       return profileImage.imageUrl;
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching profile image:', error);
       return null;
     }
   }
@@ -224,7 +207,7 @@ export default function DragDropArea() {
       const data = await response.json();
       
       // Find the first result that matches our criteria
-      const linkedinResult = data.organic?.find((result: SerperResult) => {
+      const linkedinResult = data.organic?.find((result: SerperOrganicResult) => {
         const isProfileUrl = result.link.includes('linkedin.com/in/');
         const hasNameAndCompany = 
           result.snippet.toLowerCase().includes(name.toLowerCase()) && 
@@ -238,7 +221,7 @@ export default function DragDropArea() {
 
       return linkedinResult.link;
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching LinkedIn URL:', error);
       return null;
     }
   }
@@ -247,7 +230,7 @@ export default function DragDropArea() {
     try {
       // First batch: Run main APIs in parallel
       const mainPromises = []
-      const mainPromiseTypes = []
+      const mainPromiseTypes: ('rocketreach' | 'perplexity')[] = []
       
       if (entry.runRocketReach) {
         mainPromises.push(
@@ -293,7 +276,7 @@ export default function DragDropArea() {
       
       if (entry.runProfileImage || entry.runLinkedin) {
         const serperCalls = async () => {
-          const results = {}
+          const results: ProcessedResults = {}
           if (entry.runProfileImage) {
             try {
               const profileImage = await fetchProfileImage(entry.name, entry.company)
@@ -375,7 +358,7 @@ export default function DragDropArea() {
       ])
       
       // Process results from all APIs
-      const processedResults: any = {}
+      const processedResults: ProcessedResults = {}
       
       // Process main API results
       mainResults.forEach((result, index) => {
@@ -396,7 +379,7 @@ export default function DragDropArea() {
       })
 
       // Process Serper results
-      serperResults.forEach((result, index) => {
+      serperResults.forEach((result) => {
         if (result.status === 'fulfilled') {
           const serperData = result.value
           if (serperData.profileImage) {
@@ -470,15 +453,21 @@ export default function DragDropArea() {
             current.map(e =>
               e.id === entry.id ? {
                 ...e,
-                combinedData,
+                combinedData: {
+                  ...combinedData,
+                  name: entry.name // Add name from entry
+                },
                 status: { ...e.status, openai: 'completed' }
               } : e
             )
           )
           
-          processedResults.openai = combinedData
+          processedResults.openai = {
+            ...combinedData,
+            name: entry.name // Add name here too
+          }
         } catch (error) {
-          console.error('Error:', error)
+          console.error('OpenAI Error:', error)
           setEntries(current =>
             current.map(e =>
               e.id === entry.id ? {
@@ -534,11 +523,11 @@ export default function DragDropArea() {
         throw new Error(`Serper API error: ${serperResponse.statusText}`)
       }
 
-      const serperData: SerperResult = await serperResponse.json()
-      console.log('Serper response:', serperData)
+      const data: { organic: SerperOrganicResult[] } = await serperResponse.json()
+      console.log('Serper response:', data)
 
       // 3. Find matching result
-      const matchingResult = serperData.organic?.find(result => 
+      const matchingResult = data.organic?.find(result => 
         result.snippet.toLowerCase().includes(entry.name.toLowerCase()) && 
         result.snippet.toLowerCase().includes(entry.company.toLowerCase())
       )
@@ -606,7 +595,7 @@ export default function DragDropArea() {
         body: JSON.stringify({
           messages: [{
             role: "user",
-            content: `Find information about ${entry.name} who works at ${entry.company}...`
+            content: `Find information about ${entry.name} who works at ${entry.company}. Return the information in this exact JSON structure. Include at least 3-5 expertise areas, and provide a detailed professional background covering their career progression: { currentRole: "string - detailed current position", keyAchievements: [ string - notable accomplishments in current and past roles ], professionalBackground: "string - comprehensive career narrative", careerHistory: [ { title: "string - job title", company: "string - company name", duration: "string - time period", highlights: [ string - key responsibilities and achievements ] } ], expertiseAreas: [ string - 3 to 5 specific areas of expertise ] }`
           }]
         })
       })
@@ -615,13 +604,13 @@ export default function DragDropArea() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          return '(Perplexity API credits exhausted)'
+          throw new Error('Perplexity API credits exhausted. Please check your account.')
         }
-        return '(Perplexity API request failed)'
+        throw new Error(responseData.error || 'API request failed')
       }
 
       if (!responseData.choices?.[0]?.message?.content) {
-        return '(No content in Perplexity response)'
+        throw new Error('No content in response')
       }
 
       const content = responseData.choices[0].message.content
@@ -629,7 +618,7 @@ export default function DragDropArea() {
       try {
         // First try direct JSON parse
         return JSON.parse(content)
-      } catch (parseError) {
+      } catch {
         // If direct parse fails, try to extract JSON from markdown
         console.log('Direct JSON parse failed, trying to extract from markdown...')
         
@@ -638,9 +627,9 @@ export default function DragDropArea() {
         if (jsonMatch) {
           try {
             return JSON.parse(jsonMatch[1])
-          } catch (markdownParseError) {
+          } catch {
             console.error('Failed to parse JSON from markdown:', jsonMatch[1])
-            return '(Could not parse Perplexity JSON response)'
+            throw new Error('Failed to parse JSON from markdown response')
           }
         }
 
@@ -649,27 +638,32 @@ export default function DragDropArea() {
         if (possibleJson) {
           try {
             return JSON.parse(possibleJson[0])
-          } catch (structureParseError) {
+          } catch {
             console.error('Failed to parse JSON structure:', possibleJson[0])
-            return '(Could not parse Perplexity JSON response)'
+            throw new Error('Failed to parse JSON structure from response')
           }
         }
 
-        // If all parsing attempts fail, check if it's a "no information" response
-        if (content.toLowerCase().includes('do not have enough accurate information') ||
-            content.toLowerCase().includes('cannot provide') ||
-            content.toLowerCase().includes('no reliable details')) {
-          return '(No information found in Perplexity response)'
-        }
-
-        // For any other unparseable response
+        // If all parsing attempts fail
         console.error('Failed to parse response:', content)
-        return '(Unexpected Perplexity response format)'
+        throw new Error('Could not extract valid JSON from response')
       }
 
     } catch (error) {
       console.error('Error in processPerplexity:', error)
-      return '(Perplexity API error)'
+      setEntries(current =>
+        current.map(e =>
+          e.id === entry.id ? {
+            ...e,
+            status: { ...e.status, perplexity: 'error' },
+            error: { 
+              ...e.error, 
+              perplexity: error instanceof Error ? error.message : 'Unknown error'
+            }
+          } : e
+        )
+      )
+      throw error
     }
   }
 
@@ -837,9 +831,9 @@ export default function DragDropArea() {
                             <Image 
                               src={entry.profileImage} 
                               alt={`${entry.name}'s profile`}
+                              className="w-10 h-10 rounded-full object-cover"
                               width={40}
                               height={40}
-                              className="rounded-full object-cover"
                             />
                           )}
                           <div>
@@ -941,7 +935,7 @@ export default function DragDropArea() {
                           </span>
                           {entry.perplexityResult && (
                             <div className="text-xs text-gray-600 truncate max-w-[200px]">
-                              {JSON.stringify(entry.perplexityResult).slice(0, 100)}...
+                              {JSON.stringify(entry.perplexityResult)}
                             </div>
                           )}
                         </div>
@@ -996,49 +990,35 @@ export default function DragDropArea() {
                         </div>
                       </TableCell>
                     </TableRow>
-
-                    {/* Expanded Row Content */}
+                    
+                    {/* Expanded Content */}
                     {expandedRows.has(entry.id) && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-gray-50 p-6">
-                          <div className="grid grid-cols-2 gap-6">
+                        <TableCell colSpan={6} className="bg-gray-50 p-4">
+                          <div className="grid grid-cols-2 gap-4">
                             {/* RocketReach Data */}
-                            <div className="space-y-2">
-                              <h3 className="font-semibold text-sm flex items-center gap-2">
-                                <span className={
-                                  entry.status.rocketreach === 'completed' ? 'text-green-500' :
-                                  entry.status.rocketreach === 'error' ? 'text-red-500' :
-                                  'text-gray-500'
-                                }>●</span>
-                                RocketReach Data
-                              </h3>
-                              {entry.result ? (
-                                <pre className="text-xs bg-white p-4 rounded-md border overflow-auto max-h-[300px]">
-                                  {entry.result}
-                                </pre>
-                              ) : (
-                                <p className="text-sm text-gray-500 italic">No data available</p>
-                              )}
-                            </div>
-
+                            {entry.result && (
+                              <div className="space-y-2">
+                                <h3 className="font-semibold text-sm">RocketReach Data</h3>
+                                <div className="bg-white rounded-md p-4 shadow-sm">
+                                  <pre className="text-xs whitespace-pre-wrap">
+                                    {entry.result}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+                            
                             {/* Perplexity Data */}
-                            <div className="space-y-2">
-                              <h3 className="font-semibold text-sm flex items-center gap-2">
-                                <span className={
-                                  entry.status.perplexity === 'completed' ? 'text-green-500' :
-                                  entry.status.perplexity === 'error' ? 'text-red-500' :
-                                  'text-gray-500'
-                                }>●</span>
-                                Perplexity Data
-                              </h3>
-                              {entry.perplexityResult ? (
-                                <pre className="text-xs bg-white p-4 rounded-md border overflow-auto max-h-[300px]">
-                                  {JSON.stringify(entry.perplexityResult, null, 2)}
-                                </pre>
-                              ) : (
-                                <p className="text-sm text-gray-500 italic">No data available</p>
-                              )}
-                            </div>
+                            {entry.perplexityResult && (
+                              <div className="space-y-2">
+                                <h3 className="font-semibold text-sm">Perplexity Data</h3>
+                                <div className="bg-white rounded-md p-4 shadow-sm">
+                                  <pre className="text-xs whitespace-pre-wrap">
+                                    {JSON.stringify(entry.perplexityResult)}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

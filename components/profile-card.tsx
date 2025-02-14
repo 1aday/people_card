@@ -39,9 +39,9 @@ export function ProfileCard({ data }: ProfileCardProps) {
         <Image 
           src={data.profilePhoto} 
           alt="Profile" 
+          className="w-24 h-24 rounded-full object-cover"
           width={96}
           height={96}
-          className="rounded-full object-cover"
         />
         <div className="flex-1">
           <div className="flex justify-between items-start">
