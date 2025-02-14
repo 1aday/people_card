@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
+import Image from 'next/image'
 
 // Rate limiting configuration for Standard plan
 const RATE_LIMIT = {
@@ -20,53 +21,71 @@ interface Entry {
   id: string
   name: string
   company: string
-  result?: string // RocketReach markdown result
-  perplexityResult?: any // Perplexity JSON result
-  profileImage?: string  // Add this field
-  linkedinUrl?: string  // Add this field
-  combinedData?: {
-    profilePhoto: string
-    linkedinURL: string
-    currentRole: string
-    keyAchievements: string[]
-    professionalBackground: string
-    careerHistory: {
-      title: string
-      company: string
-      duration: string
-      highlights: string[]
-    }[]
-    expertiseAreas: string[]
-  }
+  result?: string
+  perplexityResult?: PerplexityResult
+  profileImage?: string
+  linkedinUrl?: string
+  combinedData?: CombinedData
   status: {
     rocketreach: 'pending' | 'processing' | 'completed' | 'error'
     perplexity: 'pending' | 'processing' | 'completed' | 'error'
-    profileImage: 'pending' | 'processing' | 'completed' | 'error'  // Add this
-    linkedin: 'pending' | 'processing' | 'completed' | 'error'  // Add this
+    profileImage: 'pending' | 'processing' | 'completed' | 'error'
+    linkedin: 'pending' | 'processing' | 'completed' | 'error'
     openai: 'pending' | 'processing' | 'completed' | 'error'
   }
   error?: {
     rocketreach?: string
     perplexity?: string
-    profileImage?: string  // Add this
-    linkedin?: string  // Add this
+    profileImage?: string
+    linkedin?: string
     openai?: string
   }
-  // Add these fields to control which APIs to run
   runRocketReach: boolean
   runPerplexity: boolean
-  runProfileImage: boolean  // Add this
-  runLinkedin: boolean  // Add this
+  runProfileImage: boolean
+  runLinkedin: boolean
   runOpenAI: boolean
 }
 
-interface SerperResult {
-  organic: {
+interface PerplexityResult {
+  currentRole?: string
+  keyAchievements?: string[]
+  professionalBackground?: string
+  careerHistory?: Array<{
     title: string
-    link: string
-    snippet: string
-    position: number
-  }[]
+    company: string
+    duration: string
+    highlights: string[]
+  }>
+  expertiseAreas?: string[]
+}
+
+interface CombinedData {
+  name: string
+  profilePhoto: string
+  linkedinURL: string
+  currentRole: string
+  keyAchievements: string[]
+  professionalBackground: string
+  careerHistory: Array<{
+    title: string
+    company: string
+    duration: string
+    highlights: string[]
+  }>
+  expertiseAreas: string[]
+}
+
+interface SerperImage {
+  imageUrl: string
+  imageWidth: number
+  imageHeight: number
+  link: string
+}
+
+interface SerperResult {
+  link: string
+  snippet: string
 }
 
 export default function DragDropArea() {
@@ -171,7 +190,7 @@ export default function DragDropArea() {
       const data = await response.json();
       
       // Find the first image that looks like a profile picture
-      const profileImage = data.images?.find((image: any) => {
+      const profileImage = data.images?.find((image: SerperImage) => {
         const isSquare = image.imageWidth === image.imageHeight;
         const hasProfileKeyword = image.imageUrl.toLowerCase().includes('profile') || 
                                  image.link.toLowerCase().includes('linkedin');
@@ -184,7 +203,7 @@ export default function DragDropArea() {
 
       return profileImage.imageUrl;
     } catch (error) {
-      console.error('Error fetching profile image:', error);
+      console.error('Error:', error);
       return null;
     }
   }
@@ -205,7 +224,7 @@ export default function DragDropArea() {
       const data = await response.json();
       
       // Find the first result that matches our criteria
-      const linkedinResult = data.organic?.find((result: any) => {
+      const linkedinResult = data.organic?.find((result: SerperResult) => {
         const isProfileUrl = result.link.includes('linkedin.com/in/');
         const hasNameAndCompany = 
           result.snippet.toLowerCase().includes(name.toLowerCase()) && 
@@ -219,7 +238,7 @@ export default function DragDropArea() {
 
       return linkedinResult.link;
     } catch (error) {
-      console.error('Error fetching LinkedIn URL:', error);
+      console.error('Error:', error);
       return null;
     }
   }
@@ -459,7 +478,7 @@ export default function DragDropArea() {
           
           processedResults.openai = combinedData
         } catch (error) {
-          console.error('OpenAI Error:', error)
+          console.error('Error:', error)
           setEntries(current =>
             current.map(e =>
               e.id === entry.id ? {
@@ -815,10 +834,12 @@ export default function DragDropArea() {
                       <TableCell>
                         <div className="flex items-center space-x-4">
                           {entry.profileImage && (
-                            <img 
+                            <Image 
                               src={entry.profileImage} 
                               alt={`${entry.name}'s profile`}
-                              className="w-10 h-10 rounded-full object-cover"
+                              width={40}
+                              height={40}
+                              className="rounded-full object-cover"
                             />
                           )}
                           <div>

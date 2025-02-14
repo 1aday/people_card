@@ -9,6 +9,7 @@ import {
   Briefcase
 } from "lucide-react"
 import { useState } from "react"
+import Image from 'next/image'
 
 interface ProfileCardProps {
   data: {
@@ -35,10 +36,12 @@ export function ProfileCard({ data }: ProfileCardProps) {
     <Card className="p-6 h-full flex flex-col">
       {/* Header Section */}
       <div className="flex items-start space-x-4 mb-6">
-        <img 
+        <Image 
           src={data.profilePhoto} 
           alt="Profile" 
-          className="w-24 h-24 rounded-full object-cover"
+          width={96}
+          height={96}
+          className="rounded-full object-cover"
         />
         <div className="flex-1">
           <div className="flex justify-between items-start">
