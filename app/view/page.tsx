@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -35,7 +35,7 @@ interface DatabaseCard {
   expertise_areas: string[]
 }
 
-export default function ViewPage() {
+function MainContent() {
   const [projects, setProjects] = useState<ProjectWithCount[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [cards, setCards] = useState<PersonCard[]>([])
@@ -232,5 +232,43 @@ export default function ViewPage() {
         ) : null}
       </div>
     </main>
+  )
+}
+
+export default function ViewPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen p-4">
+        <nav className="w-full bg-background border-b mb-8">
+          <div className="container mx-auto px-4 py-4">
+            <h1 className="text-2xl font-bold">View Saved Projects</h1>
+          </div>
+        </nav>
+        <div className="container mx-auto">
+          <Card className="p-6 mb-8">
+            <div className="flex items-center gap-4">
+              <div className="w-80 h-10 bg-gray-100 animate-pulse rounded-md"></div>
+            </div>
+          </Card>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="p-6 h-[420px] animate-pulse">
+                  <div className="space-y-4">
+                    <div className="w-32 h-32 bg-gray-100 rounded-lg"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-100 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-100 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    }>
+      <MainContent />
+    </Suspense>
   )
 } 
