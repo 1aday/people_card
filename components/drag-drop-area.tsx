@@ -5,13 +5,22 @@ import { Card } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { Loader2, Download, Plus, Minus } from "lucide-react"
+import { 
+  Loader2, 
+  Download, 
+  Plus, 
+  Minus, 
+  LinkedinIcon,
+  LayoutGrid,
+  LayoutList
+} from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
 import { SerperOrganicResult, PerplexityResponse } from '../types/api'
 import Image from 'next/image'
-import { LinkedinIcon } from "lucide-react"
+import { MinimalProfileCard } from "./minimal-profile-card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 
 // Define SerperImageResult type
 interface SerperImageResult {
@@ -1212,25 +1221,62 @@ export default function DragDropArea() {
             </Table>
           </Card>
 
-          <div className="grid grid-cols-1 gap-8">
-            {entries
-              .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
-                entry.combinedData !== null && entry.combinedData !== undefined
-              )
-              .map((entry) => (
-                <div key={entry.id} className="w-full relative">
-                  {entry.imageSelectionFeedback && (
-                    <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
-                      Profile image updated ✓
-                    </div>
-                  )}
-                  <ProfileCard 
-                    data={entry.combinedData}
-                    imageOptions={entry.profileImageOptions}
-                    onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
-                  />
+          <div className="space-y-4">
+            <Tabs defaultValue="minimal" className="w-full">
+              <div className="flex justify-between items-center mb-4">
+                <TabsList>
+                  <TabsTrigger value="minimal" className="flex items-center gap-2">
+                    <LayoutGrid className="w-4 h-4" />
+                    Minimal View
+                  </TabsTrigger>
+                  <TabsTrigger value="expanded" className="flex items-center gap-2">
+                    <LayoutList className="w-4 h-4" />
+                    Expanded View
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="minimal" className="mt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {entries
+                    .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
+                      entry.combinedData !== null && entry.combinedData !== undefined
+                    )
+                    .map((entry) => (
+                      <MinimalProfileCard 
+                        key={entry.id}
+                        data={{
+                          ...entry.combinedData,
+                          company: entry.company
+                        }}
+                      />
+                    ))}
                 </div>
-              ))}
+              </TabsContent>
+
+              <TabsContent value="expanded" className="mt-0">
+                <div className="grid grid-cols-1 gap-8">
+                  {entries
+                    .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
+                      entry.combinedData !== null && entry.combinedData !== undefined
+                    )
+                    .map((entry) => (
+                      <div key={entry.id} className="w-full relative">
+                        {entry.imageSelectionFeedback && (
+                          <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
+                            Profile image updated ✓
+                          </div>
+                        )}
+                        <ProfileCard 
+                          data={entry.combinedData}
+                          imageOptions={entry.profileImageOptions}
+                          onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
+                        />
+                      </div>
+                    ))}
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       )}
