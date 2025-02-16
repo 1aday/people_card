@@ -825,42 +825,258 @@ export default function DragDropArea() {
       )
       console.log('Found pending entries:', pendingEntries.length)
       
-      // Process one person at a time
+      // Keep track of OpenAI processing promises
+      const openAIPromises: Promise<void>[] = []
+      
+      // Process entries one by one for non-OpenAI calls
       for (const entry of pendingEntries) {
         console.log('Processing entry:', entry.name)
         
         try {
-          const result = await processEntry(entry)
-          console.log('Successfully processed entry:', entry.name)
+          // First, process all non-OpenAI calls
+          const mainPromises = []
+          const mainPromiseTypes: ('rocketreach' | 'perplexity')[] = []
           
-          // Update entry with results and completed status
-          setEntries(current => 
-            current.map(e => 
+          if (entry.runRocketReach) {
+            mainPromises.push(
+              processRocketReach(entry).then(result => {
+                setEntries(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      result: result,
+                      status: { ...e.status, rocketreach: 'completed' }
+                    } : e
+                  )
+                )
+                return result
+              })
+            )
+            mainPromiseTypes.push('rocketreach')
+          }
+
+          if (entry.runPerplexity) {
+            mainPromises.push(
+              processPerplexity(entry).then(result => {
+                setEntries(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      perplexityResult: result,
+                      status: { ...e.status, perplexity: 'completed' }
+                    } : e
+                  )
+                )
+                return result
+              })
+            )
+            mainPromiseTypes.push('perplexity')
+          }
+
+          // Process Serper calls
+          const serperPromises = []
+          const serperPromiseTypes: ('serper')[] = []
+          
+          if (entry.runProfileImage || entry.runLinkedin) {
+            const serperCalls = async () => {
+              const results: ProcessedResults = {}
+              if (entry.runProfileImage) {
+                try {
+                  const { mainImage, allImages } = await fetchProfileImage(entry.name, entry.company)
+                  setEntries(current =>
+                    current.map(e =>
+                      e.id === entry.id ? {
+                        ...e,
+                        profileImage: mainImage,
+                        profileImageOptions: allImages,
+                        selectedImageIndex: 0,
+                        status: { ...e.status, profileImage: 'completed' }
+                      } : e
+                    )
+                  )
+                  results['profileImage'] = mainImage
+                } catch (error) {
+                  setEntries(current =>
+                    current.map(e =>
+                      e.id === entry.id ? {
+                        ...e,
+                        status: { ...e.status, profileImage: 'error' },
+                        error: { ...e.error, profileImage: error instanceof Error ? error.message : 'Failed to fetch profile image' }
+                      } : e
+                    )
+                  )
+                }
+              }
+              if (entry.runLinkedin) {
+                try {
+                  const linkedinUrl = await fetchLinkedinUrl(entry.name, entry.company)
+                  setEntries(current =>
+                    current.map(e =>
+                      e.id === entry.id ? {
+                        ...e,
+                        linkedinUrl,
+                        status: { ...e.status, linkedin: 'completed' }
+                      } : e
+                    )
+                  )
+                  results['linkedin'] = linkedinUrl
+                } catch (error) {
+                  setEntries(current =>
+                    current.map(e =>
+                      e.id === entry.id ? {
+                        ...e,
+                        status: { ...e.status, linkedin: 'error' },
+                        error: { ...e.error, linkedin: error instanceof Error ? error.message : 'Failed to fetch LinkedIn URL' }
+                      } : e
+                    )
+                  )
+                }
+              }
+              return results
+            }
+            serperPromises.push(serperCalls())
+            serperPromiseTypes.push('serper')
+          }
+
+          // Update status to processing for all selected APIs
+          setEntries(current =>
+            current.map(e =>
               e.id === entry.id ? {
                 ...e,
-                result: result.rocketReachData,
-                perplexityResult: result.perplexityData,
-                profileImage: result.profileImage,
-                linkedinUrl: result.linkedinUrl,
-                combinedData: result.combinedData,
                 status: {
-                  rocketreach: e.runRocketReach ? 'completed' : e.status.rocketreach,
-                  perplexity: e.runPerplexity ? 'completed' : e.status.perplexity,
-                  profileImage: e.runProfileImage ? 'completed' : e.status.profileImage,
-                  linkedin: e.runLinkedin ? 'completed' : e.status.linkedin,
-                  openai: e.runOpenAI ? 'completed' : e.status.openai
+                  ...e.status,
+                  ...(e.runRocketReach && { rocketreach: 'processing' }),
+                  ...(e.runPerplexity && { perplexity: 'processing' }),
+                  ...(e.runProfileImage && { profileImage: 'processing' }),
+                  ...(e.runLinkedin && { linkedin: 'processing' })
                 }
               } : e
             )
           )
 
-          // Add a small delay between processing each person
+          // Wait for all non-OpenAI calls to complete
+          const [mainResults, serperResults] = await Promise.all([
+            Promise.allSettled(mainPromises),
+            Promise.allSettled(serperPromises)
+          ])
+          
+          // Process results from all APIs
+          const processedResults: ProcessedResults = {}
+          
+          // Process main API results
+          mainResults.forEach((result, index) => {
+            const apiType = mainPromiseTypes[index]
+            if (result.status === 'fulfilled') {
+              if (apiType === 'rocketreach') {
+                processedResults.rocketreach = result.value as string || null
+              } else if (apiType === 'perplexity') {
+                processedResults.perplexity = result.value as PerplexityResponse || null
+              }
+            } else {
+              setEntries(current =>
+                current.map(e =>
+                  e.id === entry.id ? {
+                    ...e,
+                    status: { ...e.status, [apiType]: 'error' },
+                    error: { ...e.error, [apiType]: result.reason?.message || 'API call failed' }
+                  } : e
+                )
+              )
+            }
+          })
+
+          // Process Serper results
+          serperResults.forEach((result: PromiseSettledResult<ProcessedResults>) => {
+            if (result.status === 'fulfilled' && result.value) {
+              const serperData = result.value
+              if (serperData.profileImage) {
+                processedResults.profileImage = serperData.profileImage
+              }
+              if (serperData.linkedin) {
+                processedResults.linkedin = serperData.linkedin
+              }
+            }
+          })
+
+          // Start OpenAI processing in parallel
+          if (entry.runOpenAI) {
+            const openAIPromise = (async () => {
+              try {
+                setEntries(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      status: { ...e.status, openai: 'processing' }
+                    } : e
+                  )
+                )
+
+                const response = await fetch('/api/openai', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
+                    rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
+                    profileImage: entry.runProfileImage ? processedResults.profileImage : null,
+                    linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
+                    name: entry.name,
+                    company: entry.company
+                  })
+                })
+
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}))
+                  throw new Error(errorData.error || `OpenAI API request failed with status ${response.status}`)
+                }
+
+                const combinedData = await response.json()
+                
+                if (!combinedData || typeof combinedData !== 'object') {
+                  throw new Error('Invalid response format from OpenAI API')
+                }
+
+                setEntries(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      combinedData: {
+                        ...combinedData,
+                        name: entry.name
+                      },
+                      status: { ...e.status, openai: 'completed' }
+                    } : e
+                  )
+                )
+              } catch (error) {
+                console.error('OpenAI Error:', error)
+                const errorMessage = error instanceof Error ? error.message : 'OpenAI processing failed'
+                setEntries(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      status: { ...e.status, openai: 'error' },
+                      error: { ...e.error, openai: errorMessage }
+                    } : e
+                  )
+                )
+              }
+            })()
+            
+            openAIPromises.push(openAIPromise)
+          }
+
+          // Add a small delay before processing the next person's non-OpenAI calls
           await delay(1000)
         } catch (error) {
           console.error('Error processing entry:', entry.name, error)
           // Continue with next person even if one fails
         }
       }
+
+      // Wait for all OpenAI processing to complete
+      await Promise.all(openAIPromises)
     } catch (error) {
       console.error('Error in handleProcessAll:', error)
     } finally {
