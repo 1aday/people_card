@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { perplexityData, rocketReachData, profileImage: imgUrl, linkedinUrl: linkedin, name: personName, company: companyName } = body
     
-    // Store these values for use in catch block if needed
+    // Store these values for use in catch block if neededs
     name = personName
     company = companyName
     profileImage = imgUrl
