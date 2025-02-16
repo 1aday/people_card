@@ -35,7 +35,7 @@ ${rocketReachData ? `RocketReach: ${rocketReachData}` : ''}
 Image: ${profileImage || 'None'}
 LinkedIn: ${linkedinUrl || 'None'}
 
-Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL, currentRole (from data or "Role at ${company}"), keyAchievements (from data or ["No achievements found"]), professionalBackground (from data or "No background found"), careerHistory (from data or basic template), expertiseAreas (from data or ["No expertise found"]). If education or language information is found in the data, include education (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields if no relevant information is found.`
+Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL, currentRole (from data or "Role at ${company}"), keyAchievements (from data or ["No achievements found"]), professionalBackground (from data or "No background found"), careerHistory (from data or basic template), expertiseAreas (from data or ["No expertise found"]). If education or language information is found in the data, include education (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undeifed if no relevant information is found.`
 
     // IMPORTANT: Using o1-mini for better performance and reliability
     const completionPromise = openai.chat.completions.create({

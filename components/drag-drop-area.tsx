@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -157,6 +157,24 @@ export default function DragDropArea() {
   const [isProcessing, setIsProcessing] = useState(false)
   const lastRequestTime = useRef<number>(0)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    console.log('All entries:', entries.map(e => ({
+      id: e.id,
+      name: e.name,
+      hasCombinedData: !!e.combinedData,
+      status: e.status,
+      error: e.error
+    })));
+    console.log('Entries with combined data:', entries
+      .filter(e => e.combinedData)
+      .map(e => ({
+        id: e.id,
+        name: e.name,
+        combinedData: e.combinedData
+      }))
+    );
+  }, [entries])
 
   const handleAddEntry = () => {
     if (currentName && currentCompany) {
@@ -724,17 +742,21 @@ export default function DragDropArea() {
                 
                 // Update entry with combined data immediately
                 setEntries(current => {
+                  console.log('Current entries before update:', current)
                   const newEntries = current.map(e =>
                     e.id === entry.id ? {
                       ...e,
                       combinedData: {
                         ...combinedData,
-                        name: entry.name
+                        name: entry.name,
+                        profilePhoto: entry.profileImage || combinedData.profilePhoto || 'Not found',
+                        linkedinURL: entry.linkedinUrl || combinedData.linkedinURL || 'Not found'
                       },
                       status: { ...e.status, openai: 'completed' as const }
                     } : e
                   )
-                  console.log('Updated entries:', newEntries)
+                  console.log('New entries after update:', newEntries)
+                  console.log('Entry being updated:', entry.id, 'New combinedData:', newEntries.find(e => e.id === entry.id)?.combinedData)
                   return newEntries
                 })
                 
@@ -1191,8 +1213,11 @@ export default function DragDropArea() {
           </Card>
 
           <div className="grid grid-cols-1 gap-8">
-            {entries.map((entry) => (
-              entry.combinedData && (
+            {entries
+              .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
+                entry.combinedData !== null && entry.combinedData !== undefined
+              )
+              .map((entry) => (
                 <div key={entry.id} className="w-full relative">
                   {entry.imageSelectionFeedback && (
                     <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
@@ -1205,8 +1230,7 @@ export default function DragDropArea() {
                     onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
                   />
                 </div>
-              )
-            ))}
+              ))}
           </div>
         </div>
       )}
