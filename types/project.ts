@@ -16,6 +16,7 @@ export interface PersonCard {
   professionalBackground: string
   careerHistory: CareerHistoryEntry[]
   expertiseAreas: string[]
+  profile_image_options?: string[]  // Add profile image options array
 }
 
 export interface Project {

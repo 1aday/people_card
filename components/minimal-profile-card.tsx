@@ -1,7 +1,8 @@
 import { Card } from "./ui/card"
-import { LinkedinIcon, Loader2, Minus, ChevronLeft, ChevronRight, Check } from "lucide-react"
+import { LinkedinIcon, Loader2, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react"
 import Image from 'next/image'
 import { Button } from "./ui/button"
+import { Badge } from "./ui/badge"
 import { toast } from "sonner"
 import { useState } from "react"
 
@@ -14,6 +15,9 @@ interface MinimalProfileCardProps {
     currentRole: string
     conciseRole: string
     company?: string
+    keyAchievements: string[]
+    expertiseAreas: string[]
+    profile_image_options?: string[]
   }
   projectName: string
   onDelete?: () => void
@@ -25,12 +29,9 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
 
-  // Parse images from CSV
-  const images = data.profilePhoto.includes(',') 
-    ? data.profilePhoto.split(',')
-    : [data.profilePhoto];
-
-  const currentImage = images[currentImageIndex];
+  // Use profile_image_options if available, otherwise use single profilePhoto
+  const images = data.profile_image_options?.filter(img => img && img !== '') || [data.profilePhoto].filter(img => img && img !== '');
+  const currentImage = images[currentImageIndex] || null;
 
   const handleDelete = async () => {
     if (!projectName || !data.id) {
@@ -73,93 +74,109 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
   const handleSelectImage = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (onImageSelect && currentImage) {
-      // Create new CSV with selected image as first
       const newImages = [currentImage, ...images.filter(img => img !== currentImage)];
       onImageSelect(newImages.join(','))
     }
   }
 
   return (
-    <Card className="p-4 hover:shadow-lg transition-shadow duration-200 relative group">
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={handleDelete}
-          disabled={isDeleting}
-        >
-          {isDeleting ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Deleting...
-            </>
-          ) : (
-            <>
-              <Minus className="w-4 h-4 mr-2" />
-              Delete
-            </>
-          )}
-        </Button>
-      </div>
-      <div className="flex items-start space-x-4">
+    <Card className="p-6 hover:shadow-lg transition-shadow duration-200 relative group">
+      <div className="flex flex-col space-y-4">
+        {/* Profile Image Section */}
         <div 
-          className="relative w-16 h-16 flex-shrink-0"
+          className="relative w-32 h-32 mx-auto"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <Image
-            src={currentImage}
-            alt={`${data.name}'s profile`}
-            width={64}
-            height={64}
-            className="rounded-full object-cover"
-            unoptimized
-          />
+          {currentImage ? (
+            <Image
+              src={currentImage}
+              alt={`${data.name}'s profile`}
+              width={128}
+              height={128}
+              className="rounded-full object-cover w-full h-full"
+              unoptimized
+            />
+          ) : (
+            <div className="w-full h-full rounded-full bg-gray-100 flex items-center justify-center">
+              <span className="text-gray-400">No Image</span>
+            </div>
+          )}
           {isHovered && images.length > 1 && (
             <div className="absolute inset-0 flex items-center justify-between bg-black bg-opacity-40 rounded-full">
               <button
                 type="button"
                 onClick={handlePrevious}
-                className="p-1 text-white hover:bg-black hover:bg-opacity-20"
+                className="p-2 text-white hover:bg-black hover:bg-opacity-20"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={handleSelectImage}
-                className="p-1 text-white hover:bg-black hover:bg-opacity-20"
+                className="p-2 text-white hover:bg-black hover:bg-opacity-20"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={handleNext}
-                className="p-1 text-white hover:bg-black hover:bg-opacity-20"
+                className="p-2 text-white hover:bg-black hover:bg-opacity-20"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start">
-            <div className="space-y-0.5 flex-1 min-w-0">
-              <h3 className="font-semibold text-lg truncate">{data.name}</h3>
-              <p className="text-sm text-gray-600 truncate">{data.conciseRole}</p>
-              <p className="text-sm text-gray-500 truncate">{data.company}</p>
-            </div>
-            {data.linkedinURL && data.linkedinURL !== 'Not found' && (
-              <a
-                href={data.linkedinURL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:text-blue-600 flex-shrink-0 p-2 hover:bg-blue-50 rounded-full transition-colors duration-200 ml-2"
-              >
-                <LinkedinIcon className="w-5 h-5" />
-              </a>
+
+        {/* Content Section */}
+        <div className="text-center space-y-2">
+          <h3 className="font-semibold text-lg capitalize">{data.name}</h3>
+          <p className="text-gray-600 capitalize">{data.conciseRole}</p>
+          <p className="text-gray-500 capitalize">{data.company}</p>
+          
+          {data.linkedinURL && data.linkedinURL !== 'Not found' && (
+            <a
+              href={data.linkedinURL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline text-sm flex items-center gap-1 justify-center"
+            >
+              <LinkedinIcon className="w-4 h-4" />
+              LinkedIn
+            </a>
+          )}
+        </div>
+
+        {/* Expertise Tags */}
+        {data.expertiseAreas && data.expertiseAreas.length > 0 && (
+          <div className="flex flex-wrap gap-1 justify-center mt-2">
+            {data.expertiseAreas.slice(0, 3).map((area, index) => (
+              <Badge key={index} variant="secondary" className="text-xs capitalize">
+                {area}
+              </Badge>
+            ))}
+            {data.expertiseAreas.length > 3 && (
+              <Badge variant="secondary" className="text-xs">
+                +{data.expertiseAreas.length - 3}
+              </Badge>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Delete Button */}
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="absolute bottom-3 right-3 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+          title="Delete card"
+        >
+          {isDeleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+        </button>
       </div>
     </Card>
   )

@@ -52,7 +52,8 @@ export async function GET(request: Request) {
         key_achievements,
         professional_background,
         career_history,
-        expertise_areas
+        expertise_areas,
+        profile_image_options
       `)
       .eq('project_name', projectName)
       .order('created_at', { ascending: true })
@@ -86,6 +87,9 @@ export async function GET(request: Request) {
         ? careerHistory.map(normalizeCareerHistoryEntry)
         : [normalizeCareerHistoryEntry({})];
 
+      // Parse profile image options
+      const profileImageOptions = parseJsonField(card.profile_image_options, []);
+
       return {
         id: card.id,
         name: card.name || 'Unknown Name',
@@ -96,7 +100,8 @@ export async function GET(request: Request) {
         key_achievements: parseJsonField(card.key_achievements, ['No achievements listed']),
         professional_background: card.professional_background || 'No background information available',
         career_history: careerHistory,
-        expertise_areas: parseJsonField(card.expertise_areas, ['No expertise areas listed'])
+        expertise_areas: parseJsonField(card.expertise_areas, ['No expertise areas listed']),
+        profile_image_options: profileImageOptions
       };
     });
 

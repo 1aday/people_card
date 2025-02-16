@@ -20,19 +20,19 @@ import Image from 'next/image'
 
 interface ProfileCardProps {
   data: {
-    name: string
-    profilePhoto: string
-    linkedinURL: string
-    currentRole: string
-    keyAchievements: string[]
-    professionalBackground: string
-    careerHistory: {
+    name?: string
+    profilePhoto?: string
+    linkedinURL?: string
+    currentRole?: string
+    keyAchievements?: string[]
+    professionalBackground?: string
+    careerHistory?: {
       title: string
       company: string
       duration: string
       highlights: string[]
     }[]
-    expertiseAreas: string[]
+    expertiseAreas?: string[]
     education?: {
       degree: string
       institution: string
@@ -58,6 +58,9 @@ const HoverableProfileImage = ({ currentImage, allImages = [], onImageSelect, na
   const [isHovered, setIsHovered] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
 
+  // Filter out empty strings and invalid URLs from allImages
+  const validImages = allImages.filter(img => img && img !== '' && img !== 'Not found') || [];
+  
   // Don't render if no valid image
   if (!currentImage || currentImage === 'Not found' || currentImage === '') {
     return (
@@ -69,22 +72,22 @@ const HoverableProfileImage = ({ currentImage, allImages = [], onImageSelect, na
 
   const handlePrevious = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!allImages || allImages.length <= 1) return
-    const newIndex = (currentIndex - 1 + allImages.length) % allImages.length
+    if (!validImages || validImages.length <= 1) return
+    const newIndex = (currentIndex - 1 + validImages.length) % validImages.length
     setCurrentIndex(newIndex)
   }
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!allImages || allImages.length <= 1) return
-    const newIndex = (currentIndex + 1) % allImages.length
+    if (!validImages || validImages.length <= 1) return
+    const newIndex = (currentIndex + 1) % validImages.length
     setCurrentIndex(newIndex)
   }
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (onImageSelect && allImages && allImages[currentIndex]) {
-      const selectedImage = allImages[currentIndex]
+    if (onImageSelect && validImages && validImages[currentIndex]) {
+      const selectedImage = validImages[currentIndex]
       if (selectedImage && selectedImage !== '') {
         onImageSelect(selectedImage)
       }
@@ -92,8 +95,8 @@ const HoverableProfileImage = ({ currentImage, allImages = [], onImageSelect, na
   }
 
   // Ensure we never use an empty string for the image source
-  const displayImage = (allImages && allImages[currentIndex] && allImages[currentIndex] !== '') 
-    ? allImages[currentIndex] 
+  const displayImage = (validImages && validImages[currentIndex] && validImages[currentIndex] !== '') 
+    ? validImages[currentIndex] 
     : (currentImage !== '' ? currentImage : null);
 
   if (!displayImage) {
@@ -118,7 +121,7 @@ const HoverableProfileImage = ({ currentImage, allImages = [], onImageSelect, na
         className="rounded-lg object-cover"
         unoptimized
       />
-      {isHovered && allImages && allImages.length > 1 && (
+      {isHovered && validImages.length > 1 && (
         <div className="absolute inset-0 flex items-center justify-between bg-black bg-opacity-40 rounded-lg">
           <button
             type="button"
@@ -150,29 +153,45 @@ const HoverableProfileImage = ({ currentImage, allImages = [], onImageSelect, na
 export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardProps) {
   const [isCareerHistoryExpanded, setIsCareerHistoryExpanded] = useState(false)
 
-  // Ensure arrays are defined
-  const keyAchievements = Array.isArray(data.keyAchievements) ? data.keyAchievements : [];
-  const careerHistory = Array.isArray(data.careerHistory) ? data.careerHistory : [];
-  const expertiseAreas = Array.isArray(data.expertiseAreas) ? data.expertiseAreas : [];
-  const education = Array.isArray(data.education) ? data.education : [];
-  const languages = Array.isArray(data.languages) ? data.languages : [];
+  // Ensure arrays are defined and handle missing data safely
+  const keyAchievements = data?.keyAchievements?.filter(achievement => achievement && typeof achievement === 'string') || [];
+  const careerHistory = data?.careerHistory?.filter(entry => 
+    entry && 
+    typeof entry === 'object' && 
+    entry.title && 
+    entry.company && 
+    Array.isArray(entry.highlights)
+  ) || [];
+  const expertiseAreas = data?.expertiseAreas?.filter(area => area && typeof area === 'string') || [];
+  const education = data?.education?.filter(edu => 
+    edu && 
+    typeof edu === 'object' && 
+    edu.degree && 
+    edu.institution
+  ) || [];
+  const languages = data?.languages?.filter(lang => 
+    lang && 
+    typeof lang === 'object' && 
+    lang.language && 
+    lang.proficiency
+  ) || [];
 
   return (
     <Card className="p-6 space-y-6">
       <div className="flex items-start space-x-6">
         <HoverableProfileImage
-          currentImage={data.profilePhoto}
+          currentImage={data?.profilePhoto || ''}
           allImages={imageOptions}
           onImageSelect={onImageSelect}
-          name={data.name}
+          name={data?.name || ''}
         />
         <div className="flex-1">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-2xl font-bold">{data.name}</h2>
-              <p className="text-gray-600">{data.currentRole}</p>
+              <h2 className="text-2xl font-bold capitalize">{data?.name || 'Unknown'}</h2>
+              <p className="text-gray-600">{data?.currentRole || 'No role specified'}</p>
             </div>
-            {data.linkedinURL && data.linkedinURL !== 'Not found' && (
+            {data?.linkedinURL && data.linkedinURL !== 'Not found' && (
               <a
                 href={data.linkedinURL}
                 target="_blank"
@@ -197,20 +216,20 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
             </div>
             <ul className="list-disc pl-5 space-y-1">
               {keyAchievements.map((achievement, index) => (
-                <li key={index}>{achievement}</li>
+                <li key={index} className="text-gray-600 first-letter:capitalize">{achievement}</li>
               ))}
             </ul>
           </div>
         )}
 
         {/* Professional Background */}
-        {data.professionalBackground && data.professionalBackground !== 'Not specified' && (
+        {data?.professionalBackground && data.professionalBackground !== 'Not specified' && (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="w-5 h-5 text-blue-500" />
               <h3 className="text-lg font-semibold">Professional Background</h3>
             </div>
-            <p className="text-gray-700">{data.professionalBackground}</p>
+            <p className="text-gray-700 first-letter:capitalize">{data.professionalBackground}</p>
           </div>
         )}
 
@@ -224,13 +243,15 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
             
             {/* Latest Career Entry */}
             <div className="border-l-2 border-purple-200 pl-4">
-              <h4 className="font-semibold">{careerHistory[0].title}</h4>
-              <p className="text-sm text-gray-600">{careerHistory[0].company} • {careerHistory[0].duration}</p>
-              <ul className="mt-2 list-disc pl-5 space-y-1">
-                {careerHistory[0].highlights.map((highlight, hIndex) => (
-                  <li key={hIndex} className="text-sm text-gray-700">{highlight}</li>
-                ))}
-              </ul>
+              <h4 className="font-semibold capitalize">{careerHistory[0].title} at {careerHistory[0].company}</h4>
+              <p className="text-sm text-gray-600">{careerHistory[0].duration}</p>
+              {careerHistory[0].highlights && careerHistory[0].highlights.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 space-y-1">
+                  {careerHistory[0].highlights.map((highlight, hIndex) => (
+                    <li key={hIndex} className="text-sm text-gray-700 capitalize">{highlight}</li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Toggle for Previous Positions */}
@@ -255,13 +276,15 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
                   <div className="space-y-4 mt-4">
                     {careerHistory.slice(1).map((role, index) => (
                       <div key={index} className="border-l-2 border-purple-200 pl-4">
-                        <h4 className="font-semibold">{role.title}</h4>
-                        <p className="text-sm text-gray-600">{role.company} • {role.duration}</p>
-                        <ul className="mt-2 list-disc pl-5 space-y-1">
-                          {role.highlights.map((highlight, hIndex) => (
-                            <li key={hIndex} className="text-sm text-gray-700">{highlight}</li>
-                          ))}
-                        </ul>
+                        <h4 className="font-semibold capitalize">{role.title} at {role.company}</h4>
+                        <p className="text-sm text-gray-600">{role.duration}</p>
+                        {role.highlights && role.highlights.length > 0 && (
+                          <ul className="mt-2 list-disc pl-5 space-y-1">
+                            {role.highlights.map((highlight, hIndex) => (
+                              <li key={hIndex} className="text-sm text-gray-700 capitalize">{highlight}</li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -272,7 +295,7 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
         )}
 
         {/* Education - Optional Section */}
-        {education.length > 0 && (
+        {education && education.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <GraduationCap className="w-5 h-5 text-green-500" />
@@ -281,8 +304,8 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
             <div className="space-y-3">
               {education.map((edu, index) => (
                 <div key={index} className="border-l-2 border-green-200 pl-4">
-                  <h4 className="font-semibold">{edu.degree}</h4>
-                  <p className="text-sm text-gray-600">{edu.institution} • {edu.year}</p>
+                  <h4 className="font-semibold capitalize">{edu.degree}</h4>
+                  <p className="text-sm text-gray-600">{edu.institution} • {edu.year || 'Year not specified'}</p>
                 </div>
               ))}
             </div>
@@ -290,7 +313,7 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
         )}
 
         {/* Languages - Optional Section */}
-        {languages.length > 0 && (
+        {languages && languages.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Languages className="w-5 h-5 text-indigo-500" />
@@ -315,7 +338,7 @@ export function ProfileCard({ data, imageOptions, onImageSelect }: ProfileCardPr
             </div>
             <div className="flex flex-wrap gap-2">
               {expertiseAreas.map((area, index) => (
-                <Badge key={index} variant="secondary" className="bg-amber-50">{area}</Badge>
+                <Badge key={index} variant="secondary" className="bg-amber-50 capitalize">{area}</Badge>
               ))}
             </div>
           </div>

@@ -13,7 +13,8 @@ import {
   LinkedinIcon,
   LayoutGrid,
   LayoutList,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Check
 } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
@@ -254,7 +255,13 @@ export default function DragDropArea({
       try {
         const response = await fetch(`/api/get-project-cards?project_name=${encodeURIComponent(projectName)}`)
         if (!response.ok) {
-          throw new Error('Failed to load project data')
+          const errorData = await response.json().catch(() => ({}))
+          console.error('Failed to load project data:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          })
+          throw new Error(`Failed to load project data: ${response.statusText}`)
         }
 
         const cards = await response.json()
@@ -281,6 +288,7 @@ export default function DragDropArea({
           // Handle null or "None" values for profile_photo and linkedin_url
           const profilePhoto = card.profile_photo === 'None' || !card.profile_photo ? null : card.profile_photo;
           const linkedinUrl = card.linkedin_url === 'None' || !card.linkedin_url ? null : card.linkedin_url;
+          const profileImageOptions = parseJsonField(card.profile_image_options);
 
           // Extract company from current_position or concise_role
           let company = '';
@@ -300,6 +308,8 @@ export default function DragDropArea({
             name: card.name,
             company: company,
             profileImage: profilePhoto,
+            profileImageOptions: profileImageOptions,
+            selectedImageIndex: profileImageOptions?.indexOf(profilePhoto) ?? 0,
             linkedinUrl: linkedinUrl,
             status: {
               rocketreach: 'completed',
@@ -507,7 +517,7 @@ export default function DragDropArea({
     )
   }
 
-  const fetchProfileImage = async (name: string, company: string): Promise<{ mainImage: string | null, allImages: string[] }> => {
+  const fetchProfileImage = async (name: string, company: string, projectName?: string): Promise<{ mainImage: string | null, allImages: string[] }> => {
     try {
       const response = await fetch("/api/serper", {
         method: "POST",
@@ -516,7 +526,7 @@ export default function DragDropArea({
         },
         body: JSON.stringify({
           searchType: 'images',
-          query: `${name} ${company} profile photo`
+          query: `${name} ${company} profile photo headshot`
         })
       });
 
@@ -526,21 +536,93 @@ export default function DragDropArea({
 
       const data = await response.json() as SerperResponse;
       
-      // Filter out 1x1 images and get up to 4 valid images
+      // Filter for square-ish images and store all qualifying ones
       const validImages = (data.images || [])
-        .filter(image => 
-          // Filter out 1x1 images and ensure dimensions are available
-          image.imageWidth && image.imageHeight && 
-          !(image.imageWidth === 1 && image.imageHeight === 1)
-        )
-        .slice(0, 4)
+        .filter(image => {
+          // Ensure dimensions are available
+          if (!image.imageWidth || !image.imageHeight) {
+            console.log(`Skipping image - missing dimensions:`, image.imageUrl);
+            return false;
+          }
+          
+          // Calculate aspect ratio
+          const ratio = image.imageWidth / image.imageHeight;
+          const isSquarish = ratio >= 0.95 && ratio <= 1.05;  // More strict ratio (within 5%)
+          
+          if (!isSquarish) {
+            console.log(`Skipping image - non-square ratio (${ratio.toFixed(2)}):`, image.imageUrl);
+          }
+          
+          // Ensure minimum and maximum size for quality
+          const hasValidSize = image.imageWidth >= 200 && image.imageWidth <= 1500 && 
+                             image.imageHeight >= 200 && image.imageHeight <= 1500;
+          
+          if (!hasValidSize) {
+            console.log(`Skipping image - invalid size (${image.imageWidth}x${image.imageHeight}):`, image.imageUrl);
+          }
+          
+          // Ensure image URL is valid
+          let isValidUrl = false;
+          try {
+            new URL(image.imageUrl);
+            isValidUrl = true;
+          } catch {
+            console.log(`Skipping image - invalid URL:`, image.imageUrl);
+            isValidUrl = false;
+          }
+          
+          return isSquarish && hasValidSize && isValidUrl;
+        })
         .map(image => image.imageUrl);
 
-      // Convert to CSV for storage
-      const imagesCsv = validImages.join(',');
+      // Log details about the filtering
+      console.log(`Image filtering results for ${name}:`, {
+        totalImages: data.images?.length || 0,
+        validImages: validImages.length,
+        validImageUrls: validImages
+      });
+
+      const mainImage = validImages[0] || null;
+
+      // Save profile image options immediately if we have a project name
+      if (projectName) {
+        console.log('Saving profile image options immediately:', {
+          name,
+          mainImage,
+          validImages
+        });
+
+        const saveResponse = await fetch('/api/save-people-cards', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            project_name: projectName,
+            people: [{
+              name,
+              profilePhoto: mainImage || '',
+              linkedinURL: 'Not found',  // Will be updated later
+              currentRole: company || 'Not specified',
+              conciseRole: company || 'Not specified',
+              keyAchievements: [],
+              professionalBackground: '',
+              careerHistory: [],
+              expertiseAreas: [],
+              profile_image_options: validImages
+            }]
+          })
+        });
+
+        if (!saveResponse.ok) {
+          console.error('Failed to save profile image options:', await saveResponse.json());
+        } else {
+          console.log('Successfully saved profile image options');
+        }
+      }
 
       return {
-        mainImage: validImages[0] || null,
+        mainImage,
         allImages: validImages
       };
     } catch (error) {
@@ -777,6 +859,12 @@ export default function DragDropArea({
   })
 
   const handleProcessAll = async () => {
+    // Check for project name first
+    if (!projectName) {
+      toast.error('Please select or create a project first');
+      return;
+    }
+
     console.log('Starting to process all entries')
     setIsProcessing(true)
 
@@ -847,13 +935,13 @@ export default function DragDropArea({
 
               if (entry.runProfileImage) {
                 try {
-                  const { mainImage, allImages } = await fetchProfileImage(entry.name, entry.company)
+                  const { mainImage, allImages } = await fetchProfileImage(entry.name, entry.company, projectName)
                   setEntriesToProcess(current =>
                     current.map(e =>
                       e.id === entry.id ? {
                         ...e,
                         profileImage: mainImage,
-                        profileImageOptions: allImages,
+                        profileImageOptions: allImages,  // Store all qualifying images
                         selectedImageIndex: 0,
                         status: { ...e.status, profileImage: 'completed' }
                       } : e
@@ -1023,6 +1111,28 @@ export default function DragDropArea({
 
                 console.log('OpenAI API response:', combinedData)
                 
+                // First set the combinedData regardless of project name
+                setEntriesToProcess(current =>
+                  current.map(e =>
+                    e.id === entry.id ? {
+                      ...e,
+                      status: { ...e.status, openai: 'completed' },
+                      combinedData: {
+                        name: entry.name,
+                        profilePhoto: entry.profileImage || combinedData.profilePhoto || 'Not found',
+                        linkedinURL: entry.linkedinUrl || combinedData.linkedinURL || 'Not found',
+                        currentRole: combinedData.currentRole || 'Not specified',
+                        conciseRole: combinedData.conciseRole || combinedData.currentRole || 'Not specified',
+                        keyAchievements: combinedData.keyAchievements || [],
+                        professionalBackground: combinedData.professionalBackground || 'Not specified',
+                        careerHistory: combinedData.careerHistory || [],
+                        expertiseAreas: combinedData.expertiseAreas || [],
+                        profile_image_options: entry.profileImageOptions || []  // Include all profile image options
+                      }
+                    } : e
+                  )
+                );
+
                 // Create the card data
                 const card: PersonCard = {
                   name: entry.name,
@@ -1033,57 +1143,71 @@ export default function DragDropArea({
                   keyAchievements: combinedData.keyAchievements || [],
                   professionalBackground: combinedData.professionalBackground || 'Not specified',
                   careerHistory: combinedData.careerHistory || [],
-                  expertiseAreas: combinedData.expertiseAreas || []
+                  expertiseAreas: combinedData.expertiseAreas || [],
+                  profile_image_options: entry.profileImageOptions || []  // Include all profile image options
                 };
 
-                // Save the card immediately and get back the ID
+                // Only save to database if project name exists
                 if (projectName) {
                   console.log('Saving card immediately after OpenAI processing:', {
-                    card,
-                    projectName
+                    projectName,
+                    cardData: {
+                      ...card,
+                      profile_image_options: card.profile_image_options?.length || 0  // Log count for brevity
+                    }
                   });
-                  const response = await fetch('/api/save-people-cards', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      project_name: projectName,
-                      people: [card]
-                    })
-                  });
+                  
+                  try {
+                    const response = await fetch('/api/save-people-cards', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        project_name: projectName,
+                        people: [card]
+                      })
+                    });
 
-                  if (!response.ok) {
-                    const error = await response.json();
-                    console.error('Error saving card:', error);
-                    toast.error(`Failed to save card: ${error.error || 'Unknown error'}`);
-                  }
-
-                  const savedData = await response.json();
-                  console.log('Card saved successfully:', savedData);
-
-                  // Update entry with saved status, database ID, and combinedData
-                  setEntriesToProcess(current =>
-                    current.map(e =>
-                      e.id === entry.id ? {
-                        ...e,
-                        saved: true,
-                        databaseId: savedData.data?.[0]?.id,
-                        status: { ...e.status, openai: 'completed' },
-                        combinedData: {
-                          name: entry.name,
-                          profilePhoto: entry.profileImage || combinedData.profilePhoto || 'Not found',
-                          linkedinURL: entry.linkedinUrl || combinedData.linkedinURL || 'Not found',
-                          currentRole: combinedData.currentRole || 'Not specified',
-                          conciseRole: combinedData.conciseRole || combinedData.currentRole || 'Not specified',
-                          keyAchievements: combinedData.keyAchievements || [],
-                          professionalBackground: combinedData.professionalBackground || 'Not specified',
-                          careerHistory: combinedData.careerHistory || [],
-                          expertiseAreas: combinedData.expertiseAreas || []
+                    const responseData = await response.json();
+                    
+                    if (!response.ok) {
+                      console.error('Error saving card:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        error: responseData,
+                        cardData: {
+                          name: card.name,
+                          projectName,
+                          hasProfileImage: !!card.profilePhoto,
+                          imageOptionsCount: card.profile_image_options?.length || 0
                         }
-                      } : e
-                    )
-                  );
+                      });
+                      throw new Error(responseData.error || `Failed to save card: ${response.statusText}`);
+                    }
+
+                    console.log('Card saved successfully:', {
+                      responseData,
+                      savedCard: responseData.data?.[0]
+                    });
+
+                    // Update the database ID after saving
+                    setEntriesToProcess(current =>
+                      current.map(e =>
+                        e.id === entry.id ? {
+                          ...e,
+                          saved: true,
+                          databaseId: responseData.data?.[0]?.id
+                        } : e
+                      )
+                    );
+
+                  } catch (error) {
+                    console.error('Error in save operation:', error);
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error saving card';
+                    toast.error(errorMessage);
+                    throw error;  // Re-throw to be caught by outer try-catch
+                  }
                 }
 
               } catch (error) {
@@ -1270,15 +1394,28 @@ export default function DragDropArea({
     data, 
     onSave,
     onDelete,
-    projectName 
+    projectName,
+    imageOptions 
   }: { 
     data: Omit<PersonCard, 'id'> & { id?: string | number },
     onSave: (updatedData: PersonCard) => void,
     onDelete: () => void,
-    projectName: string | undefined 
+    projectName: string | undefined,
+    imageOptions?: string[]
   }) => {
     const [isEditing, setIsEditing] = useState(false)
-    const [editedData, setEditedData] = useState(data)
+    // Initialize editedData with default values for optional fields
+    const [editedData, setEditedData] = useState({
+      ...data,
+      keyAchievements: data.keyAchievements || [],
+      careerHistory: data.careerHistory || [],
+      expertiseAreas: data.expertiseAreas || [],
+      professionalBackground: data.professionalBackground || '',
+      currentRole: data.currentRole || '',
+      conciseRole: data.conciseRole || '',
+      linkedinURL: data.linkedinURL || '',
+      profilePhoto: data.profilePhoto || ''
+    })
     const [isSaving, setIsSaving] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
@@ -1296,10 +1433,11 @@ export default function DragDropArea({
 
       setIsSaving(true)
       try {
-        // Convert editedData to PersonCard type
+        // Convert editedData to PersonCard type and include profile image options
         const cardToSave: PersonCard = {
           ...editedData,
-          id: editedData.id ? (typeof editedData.id === 'string' ? parseInt(editedData.id) : editedData.id) : undefined
+          id: editedData.id ? (typeof editedData.id === 'string' ? parseInt(editedData.id) : editedData.id) : undefined,
+          profile_image_options: imageOptions || []  // Include image options in save data
         }
 
         const response = await fetch('/api/save-people-cards', {
@@ -1397,36 +1535,69 @@ export default function DragDropArea({
             <div>
               <label className="text-sm font-medium">Name</label>
               <Input
-                value={editedData.name}
+                value={editedData.name || ''}
                 onChange={(e) => setEditedData({ ...editedData, name: e.target.value })}
+                className="capitalize"
               />
             </div>
             <div>
               <label className="text-sm font-medium">Profile Image URL</label>
               <Input
-                value={editedData.profilePhoto}
+                value={editedData.profilePhoto || ''}
                 onChange={(e) => setEditedData({ ...editedData, profilePhoto: e.target.value })}
                 placeholder="https://example.com/image.jpg"
               />
+              {imageOptions && imageOptions.length > 0 && (
+                <div className="mt-2">
+                  <label className="text-sm font-medium">Available Profile Images</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
+                    {imageOptions.map((imageUrl: string, index: number) => (
+                      <div 
+                        key={index}
+                        className={`relative cursor-pointer rounded-lg overflow-hidden border-2 ${
+                          imageUrl === editedData.profilePhoto ? 'border-primary' : 'border-transparent'
+                        }`}
+                        onClick={() => setEditedData({ ...editedData, profilePhoto: imageUrl })}
+                      >
+                        <Image
+                          src={imageUrl}
+                          alt={`Profile option ${index + 1}`}
+                          width={100}
+                          height={100}
+                          className="w-full h-full object-cover aspect-square"
+                          unoptimized
+                        />
+                        {imageUrl === editedData.profilePhoto && (
+                          <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                            <Check className="w-6 h-6 text-primary" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Current Role</label>
               <Input
-                value={editedData.currentRole}
+                value={editedData.currentRole || ''}
                 onChange={(e) => setEditedData({ ...editedData, currentRole: e.target.value })}
+                className="capitalize"
               />
             </div>
             <div>
               <label className="text-sm font-medium">Concise Role</label>
               <Input
-                value={editedData.conciseRole}
+                value={editedData.conciseRole || ''}
                 onChange={(e) => setEditedData({ ...editedData, conciseRole: e.target.value })}
+                className="capitalize"
               />
             </div>
             <div>
               <label className="text-sm font-medium">LinkedIn URL</label>
               <Input
-                value={editedData.linkedinURL}
+                value={editedData.linkedinURL || ''}
                 onChange={(e) => setEditedData({ ...editedData, linkedinURL: e.target.value })}
               />
             </div>
@@ -1435,7 +1606,7 @@ export default function DragDropArea({
           <div>
             <label className="text-sm font-medium">Professional Background</label>
             <Textarea
-              value={editedData.professionalBackground}
+              value={editedData.professionalBackground || ''}
               onChange={(e) => setEditedData({ ...editedData, professionalBackground: e.target.value })}
               rows={4}
             />
@@ -1444,7 +1615,7 @@ export default function DragDropArea({
           <div>
             <label className="text-sm font-medium">Key Achievements</label>
             <div className="space-y-2">
-              {editedData.keyAchievements.map((achievement, index) => (
+              {(editedData.keyAchievements || []).map((achievement, index) => (
                 <div key={index} className="flex gap-2">
                   <Input
                     value={achievement}
@@ -1471,7 +1642,7 @@ export default function DragDropArea({
                 onClick={() => {
                   setEditedData({
                     ...editedData,
-                    keyAchievements: [...editedData.keyAchievements, '']
+                    keyAchievements: [...(editedData.keyAchievements || []), '']
                   })
                 }}
               >
@@ -1483,7 +1654,7 @@ export default function DragDropArea({
           <div>
             <label className="text-sm font-medium">Career History</label>
             <div className="space-y-4">
-              {editedData.careerHistory.map((history, index) => (
+              {(editedData.careerHistory || []).map((history, index) => (
                 <Card key={index} className="p-4">
                   <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-4">
@@ -1496,6 +1667,7 @@ export default function DragDropArea({
                             newHistory[index] = { ...history, title: e.target.value }
                             setEditedData({ ...editedData, careerHistory: newHistory })
                           }}
+                          className="capitalize"
                         />
                       </div>
                       <div>
@@ -1507,6 +1679,7 @@ export default function DragDropArea({
                             newHistory[index] = { ...history, company: e.target.value }
                             setEditedData({ ...editedData, careerHistory: newHistory })
                           }}
+                          className="capitalize"
                         />
                       </div>
                       <div>
@@ -1587,15 +1760,12 @@ export default function DragDropArea({
                 onClick={() => {
                   setEditedData({
                     ...editedData,
-                    careerHistory: [
-                      ...editedData.careerHistory,
-                      {
-                        title: '',
-                        company: '',
-                        duration: '',
-                        highlights: []
-                      }
-                    ]
+                    careerHistory: [...(editedData.careerHistory || []), {
+                      title: '',
+                      company: '',
+                      duration: '',
+                      highlights: []
+                    }]
                   })
                 }}
               >
@@ -1607,7 +1777,7 @@ export default function DragDropArea({
           <div>
             <label className="text-sm font-medium">Expertise Areas</label>
             <div className="space-y-2">
-              {editedData.expertiseAreas.map((area, index) => (
+              {(editedData.expertiseAreas || []).map((area, index) => (
                 <div key={index} className="flex gap-2">
                   <Input
                     value={area}
@@ -1634,7 +1804,7 @@ export default function DragDropArea({
                 onClick={() => {
                   setEditedData({
                     ...editedData,
-                    expertiseAreas: [...editedData.expertiseAreas, '']
+                    expertiseAreas: [...(editedData.expertiseAreas || []), '']
                   })
                 }}
               >
@@ -1870,8 +2040,8 @@ export default function DragDropArea({
                               />
                             )}
                             <div>
-                              <span className="font-medium">{entry.name}</span>
-                              <span className="text-sm text-gray-500 block">{entry.company}</span>
+                              <span className="font-medium capitalize">{entry.name}</span>
+                              <span className="text-sm text-gray-500 block capitalize">{entry.company}</span>
                             </div>
                           </div>
                           <Button
@@ -1943,6 +2113,70 @@ export default function DragDropArea({
                             />
                             <span>OpenAI</span>
                           </label>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {entry.runRocketReach && (
+                            <div 
+                              className={`flex items-center ${getStatusColor(entry.status.rocketreach)}`}
+                              title={`RocketReach: ${entry.status.rocketreach}`}
+                            >
+                              <span className={`text-lg transition-opacity duration-200 ${
+                                entry.status.rocketreach === 'completed' ? 'opacity-100' : 'opacity-20'
+                              }`}>
+                                {STATUS_EMOJIS.rocketreach}
+                                {entry.status.rocketreach === 'processing' && (
+                                  <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {entry.runPerplexity && (
+                            <div 
+                              className={`flex items-center ${getStatusColor(entry.status.perplexity)}`}
+                              title={`Perplexity: ${entry.status.perplexity}`}
+                            >
+                              <span className={`text-lg transition-opacity duration-200 ${
+                                entry.status.perplexity === 'completed' ? 'opacity-100' : 'opacity-20'
+                              }`}>
+                                {STATUS_EMOJIS.perplexity}
+                                {entry.status.perplexity === 'processing' && (
+                                  <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {entry.runProfileImage && (
+                            <div 
+                              className={`flex items-center ${getStatusColor(entry.status.profileImage)}`}
+                              title={`Profile Image: ${entry.status.profileImage}`}
+                            >
+                              <span className={`text-lg transition-opacity duration-200 ${
+                                entry.status.profileImage === 'completed' ? 'opacity-100' : 'opacity-20'
+                              }`}>
+                                {STATUS_EMOJIS.profileImage}
+                                {entry.status.profileImage === 'processing' && (
+                                  <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {entry.runLinkedin && (
+                            <div 
+                              className={`flex items-center ${getStatusColor(entry.status.linkedin)}`}
+                              title={`LinkedIn: ${entry.status.linkedin}`}
+                            >
+                              <span className={`text-lg transition-opacity duration-200 ${
+                                entry.status.linkedin === 'completed' ? 'opacity-100' : 'opacity-20'
+                              }`}>
+                                {STATUS_EMOJIS.linkedin}
+                                {entry.status.linkedin === 'processing' && (
+                                  <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -2055,7 +2289,8 @@ export default function DragDropArea({
                               id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
                               ...entry.combinedData,
                               company: entry.company,
-                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole
+                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole,
+                              profile_image_options: entry.profileImageOptions
                             }}
                             projectName={projectName || ''}
                             onDelete={() => {
@@ -2063,6 +2298,7 @@ export default function DragDropArea({
                                 current.filter(e => e.id !== entry.id)
                               )
                             }}
+                            onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
                           />
                         ))}
                       {entriesToProcess
@@ -2076,7 +2312,8 @@ export default function DragDropArea({
                               id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
                               ...entry.combinedData,
                               company: entry.company,
-                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole
+                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole,
+                              profile_image_options: entry.profileImageOptions
                             }}
                             projectName={projectName || ''}
                             onDelete={() => {
@@ -2084,6 +2321,7 @@ export default function DragDropArea({
                                 current.filter(e => e.id !== entry.id)
                               )
                             }}
+                            onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
                           />
                         ))}
                     </>
@@ -2166,7 +2404,7 @@ export default function DragDropArea({
                               linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL
                             }}
                             onSave={(updatedData) => {
-                              setProcessedEntries(current =>
+                              setEntriesToProcess(current =>
                                 current.map(e =>
                                   e.id === entry.id ? {
                                     ...e,
@@ -2176,11 +2414,12 @@ export default function DragDropArea({
                               )
                             }}
                             onDelete={() => {
-                              setProcessedEntries(current =>
+                              setEntriesToProcess(current =>
                                 current.filter(e => e.id !== entry.id)
                               )
                             }}
                             projectName={projectName}
+                            imageOptions={entry.profileImageOptions}
                           />
                         ))}
                       {entriesToProcess
@@ -2212,6 +2451,7 @@ export default function DragDropArea({
                               )
                             }}
                             projectName={projectName}
+                            imageOptions={entry.profileImageOptions}
                           />
                         ))}
                     </>
