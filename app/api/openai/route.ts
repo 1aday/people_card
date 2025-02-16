@@ -42,9 +42,9 @@ Return JSON with:
 - currentRole (detailed role with company and responsibilities)
 - conciseRole (just the role and company name, example: "Co-Chief Executive Officer at Hype" from "Co-Chief Executive Officer at Hype and Vice, leading the company's strategic direction, product development, and expansion into new markets since November 2015")
 - keyAchievements (from data or ["No achievements found"])
-- professionalBackground (from data or "No background found")
+- professionalBackground (from data make sure to be as comprehesive as possible and include any important keywords, tools, skills, experinces in yor writing or "No background found")
 - careerHistory (from data or basic template)
-- expertiseAreas these will be used as tags so keep them to max 2 words (from data or ["No expertise found"])
+- expertiseAreas these will be used as tags so keep them to max 2 words, try to have at least 5 tags, if not enogh to do 5 its fine, but ideal is 5 to 8 (from data or ["No expertise found"])
 
 If education or language information is found in the data, include education only if available if not skip this section (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undefined if no relevant information is found.`
 
@@ -147,6 +147,18 @@ If education or language information is found in the data, include education onl
       ...parsedContent,
       name: name // Always use the provided name
     }
+
+    console.log('OpenAI API final response:', {
+      hasName: !!finalResponse.name,
+      hasProfilePhoto: !!finalResponse.profilePhoto,
+      hasLinkedinURL: !!finalResponse.linkedinURL,
+      hasCurrentRole: !!finalResponse.currentRole,
+      hasConciseRole: !!finalResponse.conciseRole,
+      hasKeyAchievements: Array.isArray(finalResponse.keyAchievements),
+      hasProfessionalBackground: !!finalResponse.professionalBackground,
+      hasCareerHistory: Array.isArray(finalResponse.careerHistory),
+      hasExpertiseAreas: Array.isArray(finalResponse.expertiseAreas)
+    });
 
     return NextResponse.json(finalResponse)
 

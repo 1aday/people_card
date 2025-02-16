@@ -9,7 +9,7 @@ interface MinimalProfileCardProps {
     linkedinURL: string
     currentRole: string
     conciseRole: string
-    company: string
+    company?: string
   }
 }
 
