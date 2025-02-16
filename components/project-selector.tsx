@@ -15,20 +15,18 @@ export function ProjectSelector({ onChange, disabled }: ProjectSelectorProps) {
   const [projectName, setProjectName] = useState("")
 
   return (
-    <main className="h-screen grid place-items-center">
-      <div className="text-center">
-        <h1 className="text-7xl font-bold mb-8 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          People Card Creator
-        </h1>
-        
-        <Button 
-          onClick={() => setShowDialog(true)}
-          className="text-2xl h-auto py-6 px-8"
-        >
-          <Sparkles className="mr-2 h-6 w-6" />
-          Create New Project
-        </Button>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)]">
+      <h1 className="text-[80px] font-normal bg-gradient-to-r from-[#4169E1] to-[#9400D3] bg-clip-text text-transparent mb-8">
+        People Card Creator
+      </h1>
+      
+      <Button 
+        onClick={() => setShowDialog(true)}
+        className="bg-[#0F172A] hover:bg-[#1E293B] text-white text-xl rounded-lg px-6 py-3 flex items-center gap-2"
+      >
+        <Sparkles className="h-5 w-5" />
+        Create New Project
+      </Button>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
@@ -46,6 +44,6 @@ export function ProjectSelector({ onChange, disabled }: ProjectSelectorProps) {
           />
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   )
 }
