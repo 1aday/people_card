@@ -84,6 +84,7 @@ interface Entry {
     profilePhoto: string
     linkedinURL: string
     currentRole: string
+    conciseRole: string
     keyAchievements: string[]
     professionalBackground: string
     careerHistory: {
@@ -1247,7 +1248,8 @@ export default function DragDropArea() {
                         key={entry.id}
                         data={{
                           ...entry.combinedData,
-                          company: entry.company
+                          company: entry.company,
+                          conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole
                         }}
                       />
                     ))}
