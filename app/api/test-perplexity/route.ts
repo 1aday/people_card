@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+interface PerplexityRequest {
+  query: string
+  variables?: Record<string, string>
+}
+
+function replaceVariables(query: string, variables?: Record<string, string>) {
+  if (!variables) return query
+  return query.replace(/\{\{(\w+)\}\}/g, (match, key) => variables[key] || match)
+}
+
+export async function POST(request: Request) {
   const apiKey = process.env.PERPLEXITY_API_KEY
   
   try {
+    const { query, variables } = await request.json() as PerplexityRequest
+    const processedQuery = replaceVariables(query, variables)
+
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
@@ -15,7 +28,7 @@ export async function GET() {
         model: "sonar-pro",
         messages: [{
           role: "user",
-          content: "Say hello"
+          content: processedQuery
         }]
       })
     })

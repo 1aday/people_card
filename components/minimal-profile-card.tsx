@@ -1,11 +1,20 @@
 import { Card } from "./ui/card"
-import { LinkedinIcon, Loader2, Trash2, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp, Search, X } from "lucide-react"
+import { LinkedinIcon, Loader2, Trash2, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp, Search, X, Building2, Briefcase, Award, Sparkles, GraduationCap } from "lucide-react"
 import Image from 'next/image'
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { toast } from "sonner"
 import { useState, useMemo } from "react"
 import { Input } from "./ui/input"
+import { QueryCustomization } from './query-customization'
+import { useLocalStorage } from '../hooks/use-local-storage'
+
+interface CareerPosition {
+  title: string
+  company: string
+  duration: string
+  highlights?: string[]
+}
 
 interface MinimalProfileCardProps {
   data: {
@@ -19,6 +28,8 @@ interface MinimalProfileCardProps {
     keyAchievements: string[]
     expertiseAreas: string[]
     profile_image_options?: string[]
+    professionalBackground?: string
+    careerHistory?: CareerPosition[]
   }
   projectName: string
   onDelete?: () => void
@@ -79,6 +90,12 @@ function SearchBar({ onSearch, selectedTags, onTagRemove }: SearchBarProps) {
   )
 }
 
+// Default queries
+const DEFAULT_QUERIES = {
+  serper: "Find information about {{name}} who works at {{company}} including their background, achievements, and expertise",
+  perplexity: "Tell me about {{name}}'s professional background at {{company}}, focusing on their key achievements and areas of expertise"
+}
+
 export function MinimalProfileCardContainer({ 
   processedEntries, 
   entriesToProcess,
@@ -92,6 +109,7 @@ export function MinimalProfileCardContainer({
   onDelete?: (id: string) => void,
   onImageSelect?: (id: string, imageUrl: string) => void
 }) {
+  const [customQueries, setCustomQueries] = useLocalStorage('custom-queries', DEFAULT_QUERIES)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
@@ -136,7 +154,11 @@ export function MinimalProfileCardContainer({
   }, [processedEntries, entriesToProcess, searchQuery, selectedTags]);
 
   return (
-    <div>
+    <div className="relative">
+      <QueryCustomization
+        defaultQueries={customQueries}
+        onSave={setCustomQueries}
+      />
       <SearchBar
         onSearch={handleSearch}
         selectedTags={selectedTags}
@@ -156,7 +178,9 @@ export function MinimalProfileCardContainer({
               company: entry.company,
               keyAchievements: entry.combinedData.keyAchievements || [],
               expertiseAreas: entry.combinedData.expertiseAreas || [],
-              profile_image_options: entry.profileImageOptions || []
+              profile_image_options: entry.profileImageOptions || [],
+              professionalBackground: entry.combinedData.professionalBackground,
+              careerHistory: entry.combinedData.careerHistory
             }}
             projectName={projectName}
             onDelete={() => onDelete?.(entry.id)}
@@ -179,6 +203,9 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showAllAchievements, setShowAllAchievements] = useState(false)
+  const [showAllHistory, setShowAllHistory] = useState(false)
+  const [showFullBackground, setShowFullBackground] = useState(false)
 
   // Randomize colors but keep them consistent for each card
   const tagColors = useMemo(() => {
@@ -237,8 +264,8 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
   }
 
   return (
-    <Card className="p-4 hover:shadow-lg transition-shadow duration-200 relative group">
-      <div className="space-y-4">
+    <Card className="p-4 hover:shadow-lg transition-shadow duration-200 relative group min-h-[420px] flex flex-col">
+      <div className="space-y-4 flex-1">
         {/* Top Section: Image and Content */}
         <div className="flex gap-4">
           {/* Profile Image Section */}
@@ -294,75 +321,174 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
           {/* Content Section */}
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start">
-              <div className="space-y-1.5 min-w-0 flex-1">
-                <h3 className="font-semibold text-base capitalize truncate leading-tight">
-                  {data.name}
-                </h3>
-                <div>
-                  <div className={`relative ${!isExpanded ? "line-clamp-2" : ""}`}>
-                    <p className="text-gray-900 text-sm font-medium capitalize leading-snug">
-                      {data.conciseRole}
-                    </p>
-                    <p className="text-gray-500 text-xs capitalize leading-snug mt-0.5">
-                      {data.currentRole}
-                    </p>
-                  </div>
-                  {(data.conciseRole.length + data.currentRole.length > 100) && (
-                    <button
-                      onClick={() => setIsExpanded(!isExpanded)}
-                      className="text-xs text-blue-600 hover:text-blue-700 mt-1 flex items-center gap-0.5 group/btn"
+              <div className="space-y-2.5 min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-base capitalize truncate leading-tight">
+                    {data.name}
+                  </h3>
+                  {data.linkedinURL && data.linkedinURL !== 'Not found' && (
+                    <a
+                      href={data.linkedinURL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50 transition-colors"
+                      title="View LinkedIn Profile"
                     >
-                      {isExpanded ? (
-                        <>
-                          Show less
-                          <ChevronUp className="w-3 h-3 group-hover/btn:-translate-y-0.5 transition-transform" />
-                        </>
-                      ) : (
-                        <>
-                          Read more
-                          <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
-                        </>
-                      )}
-                    </button>
+                      <LinkedinIcon className="w-4 h-4" />
+                    </a>
                   )}
                 </div>
+                {data.careerHistory && data.careerHistory.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-gray-600 text-sm">
+                    <Briefcase className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-700 truncate">{data.careerHistory[0].title}</p>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <span className="truncate">{data.careerHistory[0].company}</span>
+                        <span className="text-gray-300 flex-shrink-0">•</span>
+                        <span className="text-gray-400 flex-shrink-0">{data.careerHistory[0].duration}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Expertise Tags */}
+                {data.expertiseAreas && data.expertiseAreas.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.expertiseAreas.map((area, index) => (
+                      <Badge 
+                        key={index} 
+                        variant="secondary" 
+                        className={`text-xs capitalize px-2 py-0.5 font-medium transition-all duration-200 ease-in-out transform hover:scale-[1.02] shadow-sm cursor-pointer ${tagColors[index % tagColors.length].bg} ${tagColors[index % tagColors.length].text} border-0`}
+                        onClick={() => onTagClick?.(area)}
+                      >
+                        {area}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
-              {data.linkedinURL && data.linkedinURL !== 'Not found' && (
-                <a
-                  href={data.linkedinURL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 p-1.5 rounded-full hover:bg-blue-50 transition-colors flex-shrink-0 ml-2"
-                  title="View LinkedIn Profile"
-                >
-                  <LinkedinIcon className="w-4 h-4" />
-                </a>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Bottom Section: Tags */}
-        {data.expertiseAreas && data.expertiseAreas.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {data.expertiseAreas.slice(0, 3).map((area, index) => (
-              <Badge 
-                key={index} 
-                variant="secondary" 
-                className={`text-xs capitalize px-2.5 py-0.5 font-medium transition-all duration-200 ease-in-out transform hover:scale-[1.02] shadow-sm cursor-pointer ${tagColors[index].bg} ${tagColors[index].text} border-0`}
-                onClick={() => onTagClick?.(area)}
+        {/* Middle Section: Key Achievements */}
+        {data.keyAchievements && data.keyAchievements.length > 0 && (
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <Award className="w-4 h-4 text-blue-500" />
+              <h4 className="text-sm font-medium text-gray-700">Key Achievements</h4>
+            </div>
+            <div className="space-y-1.5">
+              {data.keyAchievements.slice(0, showAllAchievements ? undefined : 3).map((achievement, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 opacity-60" />
+                  <p className="text-xs text-gray-600 leading-relaxed">{achievement}</p>
+                </div>
+              ))}
+            </div>
+            {data.keyAchievements.length > 3 && (
+              <button
+                onClick={() => setShowAllAchievements(!showAllAchievements)}
+                className="text-xs text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5 group/btn"
               >
-                {area}
-              </Badge>
-            ))}
-            {data.expertiseAreas.length > 3 && (
-              <Badge 
-                variant="secondary" 
-                className={`text-xs px-2 py-0.5 transition-all duration-200 ease-in-out transform hover:scale-[1.02] shadow-sm ${tagColors[3].bg} ${tagColors[3].text} border-0`}
-              >
-                +{data.expertiseAreas.length - 3}
-              </Badge>
+                {showAllAchievements ? (
+                  <>
+                    Show less
+                    <ChevronUp className="w-3 h-3 group-hover/btn:-translate-y-0.5 transition-transform" />
+                  </>
+                ) : (
+                  <>
+                    Show {data.keyAchievements.length - 3} more achievements
+                    <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
             )}
+          </div>
+        )}
+
+        {/* Career History Section */}
+        {data.careerHistory && data.careerHistory.length > 0 && (
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <GraduationCap className="w-4 h-4 text-purple-500" />
+              <h4 className="text-sm font-medium text-gray-700">Career Journey</h4>
+            </div>
+            <div className="space-y-2.5">
+              {data.careerHistory.slice(0, showAllHistory ? undefined : 1).map((position, index) => (
+                <div key={index} className="space-y-1">
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 flex-shrink-0 opacity-60" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700">{position.title}</p>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <span>{position.company}</span>
+                        <span className="text-gray-300">•</span>
+                        <span className="text-gray-400">{position.duration}</span>
+                      </div>
+                      {position.highlights && position.highlights.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 list-inside">
+                          {position.highlights.map((highlight, hIndex) => (
+                            <li key={hIndex} className="text-xs text-gray-600 pl-3 relative before:content-['•'] before:absolute before:left-0 before:text-gray-400 before:text-[8px] before:top-[2px]">
+                              {highlight}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {data.careerHistory.length > 1 && (
+              <button
+                onClick={() => setShowAllHistory(!showAllHistory)}
+                className="text-xs text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5 group/btn"
+              >
+                {showAllHistory ? (
+                  <>
+                    Show less
+                    <ChevronUp className="w-3 h-3 group-hover/btn:-translate-y-0.5 transition-transform" />
+                  </>
+                ) : (
+                  <>
+                    Show {data.careerHistory.length - 1} more positions
+                    <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Professional Background Section */}
+        {data.professionalBackground && (
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <Briefcase className="w-4 h-4 text-emerald-500" />
+              <h4 className="text-sm font-medium text-gray-700">Professional Background</h4>
+            </div>
+            <div>
+              <p className={`text-xs text-gray-600 leading-relaxed ${!showFullBackground ? "line-clamp-2" : ""}`}>
+                {data.professionalBackground}
+              </p>
+              <button
+                onClick={() => setShowFullBackground(!showFullBackground)}
+                className="text-xs text-blue-600 hover:text-blue-700 mt-1 flex items-center gap-0.5 group/btn"
+              >
+                {showFullBackground ? (
+                  <>
+                    Show less
+                    <ChevronUp className="w-3 h-3 group-hover/btn:-translate-y-0.5 transition-transform" />
+                  </>
+                ) : (
+                  <>
+                    Read more
+                    <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -370,7 +496,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
         <button
           onClick={handleDelete}
           disabled={isDeleting}
-          className="absolute bottom-3 right-3 text-gray-400 hover:text-red-500 transition-all duration-200 opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-red-50"
+          className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-all duration-200 opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-red-50"
           title="Delete card"
         >
           {isDeleting ? (

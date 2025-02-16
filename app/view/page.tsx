@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from 'next/link'
 import { Project, PersonCard } from '@/types/project'
 import { toast } from 'sonner'
+import { useSearchParams } from 'next/navigation'
 
 interface ProjectWithCount extends Pick<Project, 'name' | 'created_at'> {
   count: number
@@ -40,6 +41,15 @@ export default function ViewPage() {
   const [cards, setCards] = useState<PersonCard[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(true)
+  const searchParams = useSearchParams()
+
+  // Handle URL parameters
+  useEffect(() => {
+    const projectParam = searchParams.get('project')
+    if (projectParam) {
+      setSelectedProject(projectParam)
+    }
+  }, [searchParams])
 
   // Fetch projects on mount
   useEffect(() => {

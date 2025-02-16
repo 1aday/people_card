@@ -27,27 +27,47 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
   // Enhanced error handling for project loading
   const fetchProjects = useCallback(async () => {
     try {
-      const response = await fetch('/api/list-projects')
-      const data = await response.json()
+      console.log('Fetching projects...');
+      const response = await fetch('/api/list-projects');
+      console.log('Response status:', response.status);
       
+      // If not OK, try to get the error text
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch projects')
+        const errorText = await response.text();
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      // Try to parse JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('JSON Parse Error:', e);
+        const text = await response.text();
+        console.error('Raw Response:', text);
+        throw new Error('Invalid JSON response from server');
       }
 
       if (!data || !Array.isArray(data.projects)) {
-        console.warn('Unexpected API response format:', data)
-        return []
+        console.warn('Unexpected API response format:', data);
+        return [];
       }
 
-      return data.projects
+      console.log('Fetched projects:', data.projects);
+      return data.projects;
     } catch (error) {
-      console.error('Error loading projects:', error)
-      toast.error('Unable to load projects. Please refresh the page.')
-      return []
+      console.error('Error loading projects:', error);
+      toast.error(error instanceof Error ? error.message : 'Unable to load projects');
+      return [];
     }
-  }, [])
+  }, []);
 
-  // Load projects only once on mount
+  // Load projects and handle initial value
   useEffect(() => {
     let isMounted = true
 
@@ -57,6 +77,12 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
         const data = await fetchProjects()
         if (isMounted) {
           setProjects(data)
+          
+          // Only clear the value if we have projects loaded AND the value doesn't exist
+          if (value && data.length > 0 && !data.some((p: Project) => p.name === value)) {
+            console.log('Selected project not found in projects list:', value);
+            onChange('');
+          }
         }
       } catch (error) {
         console.error('Error in loadProjects:', error)
@@ -72,7 +98,7 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
     return () => {
       isMounted = false
     }
-  }, [fetchProjects])
+  }, [fetchProjects])  // Remove value and onChange from dependencies to prevent clearing
 
   // Validate project name
   const isValidProjectName = (name: string) => {

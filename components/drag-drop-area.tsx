@@ -245,147 +245,96 @@ export default function DragDropArea({
         return
       }
 
-      if (isLoadingProject) {
-        console.log('Already loading project, skipping');
-        return;
-      }
-
-      console.log('Loading project:', projectName);
-      setIsLoadingProject(true)
       try {
-        const response = await fetch(`/api/get-project-cards?project_name=${encodeURIComponent(projectName)}`)
+        setIsLoadingProject(true);
+        console.log('Loading project:', projectName);
+        
+        // First, verify the project exists
+        const projectsResponse = await fetch('/api/list-projects');
+        const projectsData = await projectsResponse.json();
+        const projectExists = projectsData.projects.some((p: any) => p.name === projectName);
+        
+        if (!projectExists) {
+          console.error('Project not found:', projectName);
+          toast.error(`Project "${projectName}" not found`);
+          // Only clear if we're mounted and the project name hasn't changed
+          if (isMounted && onProjectChange) {
+            onProjectChange('');
+          }
+          return;
+        }
+
+        // Then load the project data
+        const response = await fetch(`/api/get-project-cards?project_name=${encodeURIComponent(projectName)}`);
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          console.error('Failed to load project data:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorData
-          })
-          throw new Error(`Failed to load project data: ${response.statusText}`)
+          throw new Error('Failed to load project data');
         }
 
-        const cards = await response.json()
-        console.log('Loaded cards:', cards);
-        
-        if (!isMounted) {
-          console.log('Component unmounted, skipping state update');
+        const data = await response.json();
+        if (!isMounted) return;
+
+        // Log the received data for debugging
+        console.log('Received project data:', data);
+
+        // Validate data structure
+        if (!data || !Array.isArray(data.cards)) {
+          console.error('Invalid data structure received:', data);
+          toast.error('Invalid data structure received from server');
           return;
         }
-        
-        // Map database cards to Entry type
-        const loadedEntries: Entry[] = cards.map((card: any) => {
-          // Parse JSON fields if they're strings
-          const parseJsonField = (field: any) => {
-            if (!field) return [];
-            if (Array.isArray(field)) return field;
-            try {
-              return JSON.parse(field);
-            } catch {
-              return [];
-            }
-          };
 
-          // Handle null or "None" values for profile_photo and linkedin_url
-          const profilePhoto = card.profile_photo === 'None' || !card.profile_photo ? null : card.profile_photo;
-          const linkedinUrl = card.linkedin_url === 'None' || !card.linkedin_url ? null : card.linkedin_url;
-          const profileImageOptions = parseJsonField(card.profile_image_options);
-
-          // Extract company from current_position or concise_role
-          let company = '';
-          const positionMatch = (card.concise_role || card.current_position || '').match(/at\s+([^,\.]+)/i);
-          if (positionMatch) {
-            company = positionMatch[1].trim();
-          } else {
-            company = 'Unknown Company';
-          }
-
-          const keyAchievements = parseJsonField(card.key_achievements);
-          const careerHistory = parseJsonField(card.career_history);
-          const expertiseAreas = parseJsonField(card.expertise_areas);
-
-          return {
-            id: card.id.toString(),
+        const formattedEntries = data.cards.map((card: any) => ({
+          id: card.id.toString(),
+          name: card.name,
+          company: card.company || '',
+          profileImage: card.profile_photo,
+          linkedinUrl: card.linkedin_url,
+          databaseId: card.id.toString(),
+          saved: true,
+          combinedData: {
             name: card.name,
-            company: company,
-            profileImage: profilePhoto,
-            profileImageOptions: profileImageOptions,
-            selectedImageIndex: profileImageOptions?.indexOf(profilePhoto) ?? 0,
-            linkedinUrl: linkedinUrl,
-            status: {
-              rocketreach: 'completed',
-              perplexity: 'completed',
-              profileImage: profilePhoto ? 'completed' : 'pending',
-              linkedin: linkedinUrl ? 'completed' : 'pending',
-              openai: 'completed'
-            },
-            runRocketReach: false,
-            runPerplexity: false,
-            runProfileImage: !profilePhoto,
-            runLinkedin: !linkedinUrl,
-            runOpenAI: false,
-            saved: true,
-            databaseId: card.id,
-            combinedData: {
-              name: card.name,
-              profilePhoto: profilePhoto || '',
-              linkedinURL: linkedinUrl || '',
-              currentRole: card.current_position || '',
-              conciseRole: card.concise_role || card.current_position || '',
-              keyAchievements: keyAchievements,
-              professionalBackground: card.professional_background || '',
-              careerHistory: careerHistory,
-              expertiseAreas: expertiseAreas
-            }
-          }
-        })
-
-        console.log('Mapped entries:', loadedEntries);
-
-        if (!isMounted) {
-          console.log('Component unmounted before setting state');
-          return;
-        }
-
-        // Set these as processed entries since they're from the database
-        setProcessedEntries(loadedEntries)
-        // Clear any entries that were waiting to be processed
-        setEntriesToProcess([])
-
-        // Call onCardsUpdate with the loaded cards
-        const formattedCards = loadedEntries.map(entry => ({
-          name: entry.name,
-          profilePhoto: entry.profileImage || '',
-          linkedinURL: entry.linkedinUrl || '',
-          currentRole: entry.combinedData?.currentRole || '',
-          conciseRole: entry.combinedData?.conciseRole || entry.combinedData?.currentRole || '',
-          keyAchievements: entry.combinedData?.keyAchievements || [],
-          professionalBackground: entry.combinedData?.professionalBackground || '',
-          careerHistory: entry.combinedData?.careerHistory || [],
-          expertiseAreas: entry.combinedData?.expertiseAreas || []
+            profilePhoto: card.profile_photo,
+            linkedinURL: card.linkedin_url,
+            currentRole: card.current_role,
+            conciseRole: card.concise_role,
+            keyAchievements: card.key_achievements || [],
+            professionalBackground: card.professional_background || '',
+            careerHistory: card.career_history || [],
+            expertiseAreas: card.expertise_areas || []
+          },
+          status: {
+            rocketreach: 'completed',
+            perplexity: 'completed',
+            profileImage: 'completed',
+            linkedin: 'completed',
+            openai: 'completed'
+          },
+          runRocketReach: false,
+          runPerplexity: false,
+          runProfileImage: false,
+          runLinkedin: false,
+          runOpenAI: false
         }));
-        onCardsUpdate(formattedCards);
 
-        console.log('Updated state with loaded entries');
-
-      } catch (error) {
-        console.error('Error loading project data:', error)
         if (isMounted) {
-          toast.error('Failed to load project data')
+          setProcessedEntries(formattedEntries);
+          setEntriesToProcess([]);
         }
+      } catch (error) {
+        console.error('Error loading project:', error);
+        toast.error('Failed to load project data');
       } finally {
         if (isMounted) {
-          setIsLoadingProject(false)
-          console.log('Finished loading project');
+          setIsLoadingProject(false);
         }
       }
-    }
+    };
 
-    loadExistingProject()
-
+    loadExistingProject();
     return () => {
-      isMounted = false
-    }
-  }, [projectName])
+      isMounted = false;
+    };
+  }, [projectName]); // Only depend on projectName
 
   useEffect(() => {
     console.log('All entries:', entriesToProcess.map(e => ({
