@@ -573,10 +573,25 @@ export default function DragDropArea() {
           })
 
           if (!response.ok) {
-            throw new Error('OpenAI API request failed')
+            const errorData = await response.json().catch(() => ({}))
+            console.error('OpenAI API error:', errorData)
+            throw new Error(errorData.error || `OpenAI API request failed with status ${response.status}`)
           }
 
-          const combinedData = await response.json() as OpenAIResponse
+          const combinedData = await response.json()
+          
+          // Validate the response structure
+          if (!combinedData || typeof combinedData !== 'object') {
+            throw new Error('Invalid response format from OpenAI API')
+          }
+
+          // Ensure required fields are present
+          const requiredFields = ['name', 'currentRole', 'keyAchievements', 'professionalBackground', 'careerHistory', 'expertiseAreas']
+          const missingFields = requiredFields.filter(field => !(field in combinedData))
+          if (missingFields.length > 0) {
+            throw new Error(`Missing required fields in OpenAI response: ${missingFields.join(', ')}`)
+          }
+
           console.log('OpenAI API response:', combinedData)
           
           // Update entry with combined data immediately
@@ -601,15 +616,18 @@ export default function DragDropArea() {
           }
         } catch (error) {
           console.error('OpenAI Error:', error)
+          const errorMessage = error instanceof Error ? error.message : 'OpenAI processing failed'
           setEntries(current =>
             current.map(e =>
               e.id === entry.id ? {
                 ...e,
                 status: { ...e.status, openai: 'error' },
-                error: { ...e.error, openai: error instanceof Error ? error.message : 'OpenAI processing failed' }
+                error: { ...e.error, openai: errorMessage }
               } : e
             )
           )
+          // Don't throw the error, just log it and continue with other entries
+          console.error('Error processing OpenAI for entry:', entry.name, error)
         }
       }
 
