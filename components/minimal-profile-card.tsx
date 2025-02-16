@@ -8,6 +8,7 @@ interface MinimalProfileCardProps {
     profilePhoto: string
     linkedinURL: string
     currentRole: string
+    conciseRole: string
     company: string
   }
 }
@@ -30,7 +31,7 @@ export function MinimalProfileCard({ data }: MinimalProfileCardProps) {
           <div className="flex justify-between items-start">
             <div className="space-y-0.5 flex-1 min-w-0">
               <h3 className="font-semibold text-lg truncate">{data.name}</h3>
-              <p className="text-sm text-gray-600 break-words leading-snug">{data.currentRole}</p>
+              <p className="text-sm text-gray-600 truncate">{data.conciseRole}</p>
               <p className="text-sm text-gray-500 truncate">{data.company}</p>
             </div>
             {data.linkedinURL && data.linkedinURL !== 'Not found' && (

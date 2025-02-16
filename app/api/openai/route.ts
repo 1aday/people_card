@@ -35,7 +35,18 @@ ${rocketReachData ? `RocketReach: ${rocketReachData}` : ''}
 Image: ${profileImage || 'None'}
 LinkedIn: ${linkedinUrl || 'None'}
 
-Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL, currentRole (from data or "Role at ${company}") keep the role succint no sentances it should be role at company thats it, keyAchievements (from data or ["No achievements found"]), professionalBackground (from data or "No background found"), careerHistory (from data or basic template), expertiseAreas these will be used as tags so keep them to max 2 words (from data or ["No expertise found"]). If education or language information is found in the data, include education only if availbe if not skip this section (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undeifed if no relevant information is found.`
+Return JSON with: 
+- name
+- profilePhoto (use provided or "Not found")
+- linkedinURL
+- currentRole (detailed role with company and responsibilities)
+- conciseRole (just the role and company name, example: "Co-Chief Executive Officer at Hype" from "Co-Chief Executive Officer at Hype and Vice, leading the company's strategic direction, product development, and expansion into new markets since November 2015")
+- keyAchievements (from data or ["No achievements found"])
+- professionalBackground (from data or "No background found")
+- careerHistory (from data or basic template)
+- expertiseAreas these will be used as tags so keep them to max 2 words (from data or ["No expertise found"])
+
+If education or language information is found in the data, include education only if available if not skip this section (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undefined if no relevant information is found.`
 
     // IMPORTANT: Using o1-mini for better performance and reliability
     const completionPromise = openai.chat.completions.create({
@@ -65,6 +76,7 @@ Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL,
       profilePhoto?: string;
       linkedinURL?: string;
       currentRole?: string;
+      conciseRole?: string;
       keyAchievements?: string[];
       professionalBackground?: string;
       careerHistory?: Array<{
@@ -116,6 +128,7 @@ Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL,
       profilePhoto: profileImage || 'Not found',
       linkedinURL: linkedinUrl || 'Not found',
       currentRole: `Role at ${company}`,
+      conciseRole: `Role at ${company}`,
       keyAchievements: ['No achievements found'],
       professionalBackground: 'No background information found',
       careerHistory: [{ 
@@ -145,6 +158,7 @@ Return JSON with: name, profilePhoto (use provided or "Not found"), linkedinURL,
       profilePhoto: profileImage || 'Not found',
       linkedinURL: linkedinUrl || 'Not found',
       currentRole: company ? `Role at ${company}` : 'Not found',
+      conciseRole: company ? `Role at ${company}` : 'Not found',
       keyAchievements: ['Data unavailable due to error'],
       professionalBackground: 'Data unavailable due to error',
       careerHistory: [{
