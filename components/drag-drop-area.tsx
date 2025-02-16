@@ -1031,21 +1031,38 @@ export default function DragDropArea() {
                       onClick={() => toggleRowExpansion(entry.id)}
                     >
                       <TableCell>
-                        <div className="flex items-center space-x-4">
-                          {entry.profileImage && (
-                            <Image 
-                              src={entry.profileImage} 
-                              alt={`${entry.name}'s profile`}
-                              className="w-10 h-10 rounded-full object-cover"
-                              width={40}
-                              height={40}
-                              unoptimized
-                            />
-                          )}
-                          <div>
-                            <span className="font-medium">{entry.name}</span>
-                            <span className="text-sm text-gray-500 block">{entry.company}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            {entry.profileImage && (
+                              <Image 
+                                src={entry.profileImage} 
+                                alt={`${entry.name}'s profile`}
+                                className="w-10 h-10 rounded-full object-cover"
+                                width={40}
+                                height={40}
+                                unoptimized
+                              />
+                            )}
+                            <div>
+                              <span className="font-medium">{entry.name}</span>
+                              <span className="text-sm text-gray-500 block">{entry.company}</span>
+                            </div>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleRowExpansion(entry.id)
+                            }}
+                            className="h-8 w-8 p-0"
+                          >
+                            {expandedRows.has(entry.id) ? (
+                              <Minus className="h-4 w-4" />
+                            ) : (
+                              <Plus className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
                       </TableCell>
                       <TableCell>
