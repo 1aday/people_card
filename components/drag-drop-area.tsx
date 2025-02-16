@@ -5,7 +5,7 @@ import { Card } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { Loader2, Plus, Minus, Download } from "lucide-react"
+import { Loader2, Download, Plus, Minus } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
@@ -1162,6 +1162,17 @@ export default function DragDropArea() {
                     {expandedRows.has(entry.id) && (
                       <TableRow>
                         <TableCell colSpan={6} className="bg-gray-50 p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold">Raw Data</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleRowExpansion(entry.id)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                          </div>
                           <div className="grid grid-cols-2 gap-4">
                             {/* RocketReach Data */}
                             {entry.result && (
@@ -1181,7 +1192,7 @@ export default function DragDropArea() {
                                 <h3 className="font-semibold text-sm">Perplexity Data</h3>
                                 <div className="bg-white rounded-md p-4 shadow-sm">
                                   <pre className="text-xs whitespace-pre-wrap">
-                                    {JSON.stringify(entry.perplexityResult)}
+                                    {JSON.stringify(entry.perplexityResult, null, 2)}
                                   </pre>
                                 </div>
                               </div>
