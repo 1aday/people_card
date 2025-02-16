@@ -69,6 +69,7 @@ interface Entry {
   profileImageOptions?: string[]
   selectedImageIndex?: number
   linkedinUrl?: string | null
+  imageSelectionFeedback?: boolean
   combinedData?: {
     name: string
     profilePhoto: string
@@ -876,6 +877,7 @@ export default function DragDropArea() {
       'Name',
       'Current Role',
       'LinkedIn URL',
+      'Profile Image URL',
       'Professional Background',
       'Key Achievements',
       'Expertise Areas',
@@ -891,6 +893,7 @@ export default function DragDropArea() {
         data.name,
         data.currentRole,
         data.linkedinURL,
+        entry.profileImage || data.profilePhoto, // Use the selected profile image
         data.professionalBackground,
         data.keyAchievements.join('|'),
         data.expertiseAreas.join('|'),
@@ -929,6 +932,36 @@ export default function DragDropArea() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  }
+
+  // Add a new function to handle image selection feedback
+  const handleImageSelect = (entryId: string, imageUrl: string) => {
+    setEntries(current =>
+      current.map(e =>
+        e.id === entryId ? {
+          ...e,
+          profileImage: imageUrl,
+          combinedData: e.combinedData ? {
+            ...e.combinedData,
+            profilePhoto: imageUrl
+          } : null,
+          // Add a temporary flag for feedback
+          imageSelectionFeedback: true
+        } : e
+      )
+    )
+
+    // Remove the feedback after a short delay
+    setTimeout(() => {
+      setEntries(current =>
+        current.map(e =>
+          e.id === entryId ? {
+            ...e,
+            imageSelectionFeedback: false
+          } : e
+        )
+      )
+    }, 2000)
   }
 
   return (
@@ -1128,7 +1161,9 @@ export default function DragDropArea() {
                                 className={`flex items-center ${getStatusColor(entry.status[api])}`}
                                 title={`${api.charAt(0).toUpperCase() + api.slice(1)}: ${entry.status[api]}`}
                               >
-                                <span className="text-lg">
+                                <span className={`text-lg transition-opacity duration-200 ${
+                                  entry.status[api] === 'completed' ? 'opacity-100' : 'opacity-20'
+                                }`}>
                                   {STATUS_EMOJIS[api]}
                                   {entry.status[api] === 'processing' && (
                                     <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
@@ -1157,7 +1192,9 @@ export default function DragDropArea() {
                               className={`flex items-center ${getStatusColor(entry.status.openai)}`}
                               title={`OpenAI: ${entry.status.openai}`}
                             >
-                              <span className="text-lg">
+                              <span className={`text-lg transition-opacity duration-200 ${
+                                entry.status.openai === 'completed' ? 'opacity-100' : 'opacity-20'
+                              }`}>
                                 {STATUS_EMOJIS.openai}
                                 {entry.status.openai === 'processing' && (
                                   <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
@@ -1227,24 +1264,16 @@ export default function DragDropArea() {
           <div className="grid grid-cols-1 gap-8">
             {entries.map((entry) => (
               entry.combinedData && (
-                <div key={entry.id} className="w-full">
+                <div key={entry.id} className="w-full relative">
+                  {entry.imageSelectionFeedback && (
+                    <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
+                      Profile image updated ✓
+                    </div>
+                  )}
                   <ProfileCard 
                     data={entry.combinedData}
                     imageOptions={entry.profileImageOptions}
-                    onImageSelect={(imageUrl) => {
-                      setEntries(current =>
-                        current.map(e =>
-                          e.id === entry.id ? {
-                            ...e,
-                            profileImage: imageUrl,
-                            combinedData: {
-                              ...e.combinedData!,
-                              profilePhoto: imageUrl
-                            }
-                          } : e
-                        )
-                      )
-                    }}
+                    onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
                   />
                 </div>
               )
