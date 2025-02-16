@@ -1890,13 +1890,6 @@ export default function DragDropArea({
                   }}
                   disabled={disabled || isProcessing} 
                 />
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreatingNewProject(true)}
-                  disabled={disabled || isProcessing}
-                >
-                  Create New Project
-                </Button>
               </div>
             )}
             {isLoadingProject && (
@@ -1910,22 +1903,9 @@ export default function DragDropArea({
           {(projectName || isCreatingNewProject) && (
             <>
               <div className="grid grid-cols-1 gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Name"
-                    value={currentName}
-                    onChange={(e) => setCurrentName(e.target.value)}
-                  />
-                  <Input
-                    placeholder="Company"
-                    value={currentCompany}
-                    onChange={(e) => setCurrentCompany(e.target.value)}
-                  />
-                </div>
-                
                 <div className="relative">
                   <Textarea
-                    placeholder="Or paste CSV/spreadsheet data here (Name, Company)&#10;Example:&#10;John Doe, Acme Inc&#10;Jane Smith, Tech Corp"
+                    placeholder="Paste CSV/spreadsheet data here (Name, Company)&#10;Example:&#10;Amir Jaffari, Shopify&#10;Jane Smith, Tech Corp"
                     className="min-h-[100px]"
                     onChange={(e) => {
                       const text = e.target.value
@@ -1939,16 +1919,6 @@ export default function DragDropArea({
                     Paste and it will automatically add to the table
                   </div>
                 </div>
-              </div>
-
-              <div className="flex justify-end space-x-4">
-                <Button 
-                  variant="secondary"
-                  onClick={handleAddEntry}
-                  disabled={!currentName || !currentCompany}
-                >
-                  Add Single Entry
-                </Button>
               </div>
             </>
           )}
