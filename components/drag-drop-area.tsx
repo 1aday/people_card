@@ -516,7 +516,7 @@ export default function DragDropArea({
         },
         body: JSON.stringify({
           searchType: 'images',
-          query: `${name} ${company}`
+          query: `${name} ${company} profile photo`
         })
       });
 
@@ -526,14 +526,22 @@ export default function DragDropArea({
 
       const data = await response.json() as SerperResponse;
       
-      // Find up to 4 square images
-      const squareImages = data.images?.filter(image => 
-        image.imageWidth === image.imageHeight
-      ).slice(0, 4).map(image => image.imageUrl) || [];
+      // Filter out 1x1 images and get up to 4 valid images
+      const validImages = (data.images || [])
+        .filter(image => 
+          // Filter out 1x1 images and ensure dimensions are available
+          image.imageWidth && image.imageHeight && 
+          !(image.imageWidth === 1 && image.imageHeight === 1)
+        )
+        .slice(0, 4)
+        .map(image => image.imageUrl);
+
+      // Convert to CSV for storage
+      const imagesCsv = validImages.join(',');
 
       return {
-        mainImage: squareImages[0] || null,
-        allImages: squareImages
+        mainImage: validImages[0] || null,
+        allImages: validImages
       };
     } catch (error) {
       console.error('Error fetching profile image:', error);
@@ -2044,9 +2052,16 @@ export default function DragDropArea({
                           <MinimalProfileCard 
                             key={entry.id}
                             data={{
+                              id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
                               ...entry.combinedData,
                               company: entry.company,
                               conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole
+                            }}
+                            projectName={projectName || ''}
+                            onDelete={() => {
+                              setProcessedEntries(current =>
+                                current.filter(e => e.id !== entry.id)
+                              )
                             }}
                           />
                         ))}
@@ -2058,9 +2073,16 @@ export default function DragDropArea({
                           <MinimalProfileCard 
                             key={entry.id}
                             data={{
+                              id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
                               ...entry.combinedData,
                               company: entry.company,
                               conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole
+                            }}
+                            projectName={projectName || ''}
+                            onDelete={() => {
+                              setEntriesToProcess(current =>
+                                current.filter(e => e.id !== entry.id)
+                              )
                             }}
                           />
                         ))}

@@ -10,6 +10,7 @@ import { Loader2, LayoutGrid, LayoutList } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from 'next/link'
 import { Project, PersonCard } from '@/types/project'
+import { toast } from 'sonner'
 
 interface ProjectWithCount extends Pick<Project, 'name' | 'created_at'> {
   count: number
@@ -158,6 +159,45 @@ export default function ViewPage() {
                     <MinimalProfileCard 
                       key={card.id || card.name}
                       data={card}
+                      projectName={selectedProject}
+                      onDelete={() => {
+                        setCards(cards.filter(c => c.id !== card.id))
+                      }}
+                      onImageSelect={async (newPhotoString) => {
+                        if (!card.id) return;
+                        
+                        try {
+                          const response = await fetch('/api/save-people-cards', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              project_name: selectedProject,
+                              people: [{
+                                ...card,
+                                profilePhoto: newPhotoString
+                              }]
+                            })
+                          });
+
+                          if (!response.ok) {
+                            throw new Error('Failed to update profile photo');
+                          }
+
+                          // Update local state
+                          setCards(cards.map(c => 
+                            c.id === card.id 
+                              ? { ...c, profilePhoto: newPhotoString }
+                              : c
+                          ));
+
+                          toast.success('Profile photo updated successfully');
+                        } catch (error) {
+                          console.error('Error updating profile photo:', error);
+                          toast.error('Failed to update profile photo');
+                        }
+                      }}
                     />
                   ))}
                 </div>
