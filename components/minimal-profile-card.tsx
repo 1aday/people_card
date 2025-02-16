@@ -74,8 +74,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
   const handleSelectImage = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (onImageSelect && currentImage) {
-      const newImages = [currentImage, ...images.filter(img => img !== currentImage)];
-      onImageSelect(newImages.join(','))
+      onImageSelect(currentImage)  // Just pass the selected image URL
     }
   }
 
@@ -108,6 +107,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
                 type="button"
                 onClick={handlePrevious}
                 className="p-2 text-white hover:bg-black hover:bg-opacity-20"
+                title="Previous image"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -115,6 +115,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
                 type="button"
                 onClick={handleSelectImage}
                 className="p-2 text-white hover:bg-black hover:bg-opacity-20"
+                title="Set as profile image"
               >
                 <Check className="w-5 h-5" />
               </button>
@@ -122,6 +123,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect 
                 type="button"
                 onClick={handleNext}
                 className="p-2 text-white hover:bg-black hover:bg-opacity-20"
+                title="Next image"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>

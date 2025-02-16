@@ -526,7 +526,7 @@ export default function DragDropArea({
         },
         body: JSON.stringify({
           searchType: 'images',
-          query: `${name} ${company} profile photo headshot`
+          query: `${name} ${company}`
         })
       });
 
@@ -536,57 +536,38 @@ export default function DragDropArea({
 
       const data = await response.json() as SerperResponse;
       
-      // Filter for square-ish images and store all qualifying ones
+      // Get all qualifying images first
       const validImages = (data.images || [])
         .filter(image => {
-          // Ensure dimensions are available
           if (!image.imageWidth || !image.imageHeight) {
-            console.log(`Skipping image - missing dimensions:`, image.imageUrl);
             return false;
           }
           
-          // Calculate aspect ratio
           const ratio = image.imageWidth / image.imageHeight;
-          const isSquarish = ratio >= 0.95 && ratio <= 1.05;  // More strict ratio (within 5%)
+          const isSquarish = ratio >= 0.95 && ratio <= 1.05;
           
-          if (!isSquarish) {
-            console.log(`Skipping image - non-square ratio (${ratio.toFixed(2)}):`, image.imageUrl);
-          }
-          
-          // Ensure minimum and maximum size for quality
           const hasValidSize = image.imageWidth >= 200 && image.imageWidth <= 1500 && 
                              image.imageHeight >= 200 && image.imageHeight <= 1500;
           
-          if (!hasValidSize) {
-            console.log(`Skipping image - invalid size (${image.imageWidth}x${image.imageHeight}):`, image.imageUrl);
-          }
-          
-          // Ensure image URL is valid
           let isValidUrl = false;
           try {
             new URL(image.imageUrl);
             isValidUrl = true;
           } catch {
-            console.log(`Skipping image - invalid URL:`, image.imageUrl);
             isValidUrl = false;
           }
           
           return isSquarish && hasValidSize && isValidUrl;
         })
-        .map(image => image.imageUrl);
+        .map(image => image.imageUrl)
+        .slice(0, 4);  // Limit to 4 images
 
-      // Log details about the filtering
-      console.log(`Image filtering results for ${name}:`, {
-        totalImages: data.images?.length || 0,
-        validImages: validImages.length,
-        validImageUrls: validImages
-      });
-
-      const mainImage = validImages[0] || null;
+      // Get the first valid image as main image
+      const mainImage = validImages.length > 0 ? validImages[0] : null;
 
       // Save profile image options immediately if we have a project name
       if (projectName) {
-        console.log('Saving profile image options immediately:', {
+        console.log('Saving profile image options:', {
           name,
           mainImage,
           validImages
@@ -602,14 +583,14 @@ export default function DragDropArea({
             people: [{
               name,
               profilePhoto: mainImage || '',
-              linkedinURL: 'Not found',  // Will be updated later
-              currentRole: company || 'Not specified',
-              conciseRole: company || 'Not specified',
+              linkedinURL: '',  // Will be updated later
+              currentRole: company || '',
+              conciseRole: company || '',
               keyAchievements: [],
               professionalBackground: '',
               careerHistory: [],
               expertiseAreas: [],
-              profile_image_options: validImages
+              profile_image_options: validImages  // Save all valid images
             }]
           })
         });
@@ -1350,7 +1331,7 @@ export default function DragDropArea({
     const entry = [...entriesToProcess, ...processedEntries].find(e => e.id === entryId)
     if (!entry || !entry.combinedData || !projectName) return
 
-    // Update the database
+    // Update the database - keep profile_image_options but update the main profile photo
     try {
       const response = await fetch('/api/save-people-cards', {
         method: 'POST',
@@ -1361,7 +1342,8 @@ export default function DragDropArea({
           project_name: projectName,
           people: [{
             ...entry.combinedData,
-            profilePhoto: imageUrl
+            profilePhoto: imageUrl,
+            profile_image_options: entry.profileImageOptions  // Keep all image options
           }]
         })
       })
@@ -2278,7 +2260,7 @@ export default function DragDropArea({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(processedEntries.length > 0 || entriesToProcess.length > 0) ? (
                     <>
-                      {processedEntries
+                      {[...processedEntries, ...entriesToProcess]
                         .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
                           entry.combinedData !== null && entry.combinedData !== undefined
                         )
@@ -2287,39 +2269,27 @@ export default function DragDropArea({
                             key={entry.id}
                             data={{
                               id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
-                              ...entry.combinedData,
+                              name: entry.name,
+                              profilePhoto: entry.profileImage || entry.combinedData.profilePhoto || '',
+                              linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
+                              currentRole: entry.combinedData.currentRole || '',
+                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
                               company: entry.company,
-                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole,
-                              profile_image_options: entry.profileImageOptions
+                              keyAchievements: entry.combinedData.keyAchievements || [],
+                              expertiseAreas: entry.combinedData.expertiseAreas || [],
+                              profile_image_options: entry.profileImageOptions || []
                             }}
                             projectName={projectName || ''}
                             onDelete={() => {
-                              setProcessedEntries(current =>
-                                current.filter(e => e.id !== entry.id)
-                              )
-                            }}
-                            onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
-                          />
-                        ))}
-                      {entriesToProcess
-                        .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
-                          entry.combinedData !== null && entry.combinedData !== undefined
-                        )
-                        .map((entry) => (
-                          <MinimalProfileCard 
-                            key={entry.id}
-                            data={{
-                              id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
-                              ...entry.combinedData,
-                              company: entry.company,
-                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole,
-                              profile_image_options: entry.profileImageOptions
-                            }}
-                            projectName={projectName || ''}
-                            onDelete={() => {
-                              setEntriesToProcess(current =>
-                                current.filter(e => e.id !== entry.id)
-                              )
+                              if (processedEntries.find(e => e.id === entry.id)) {
+                                setProcessedEntries(current =>
+                                  current.filter(e => e.id !== entry.id)
+                                )
+                              } else {
+                                setEntriesToProcess(current =>
+                                  current.filter(e => e.id !== entry.id)
+                                )
+                              }
                             }}
                             onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
                           />
