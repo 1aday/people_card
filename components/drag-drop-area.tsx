@@ -127,39 +127,6 @@ interface PromiseSettledResult<T> {
   reason?: Error
 }
 
-interface OpenAIResponse {
-  name: string
-  profilePhoto: string
-  linkedinURL: string
-  currentRole: string
-  keyAchievements: string[]
-  professionalBackground: string
-  careerHistory: {
-    title: string
-    company: string
-    duration: string
-    highlights: string[]
-  }[]
-  expertiseAreas: string[]
-  education?: {
-    degree: string
-    institution: string
-    year: string
-  }[]
-  languages?: {
-    language: string
-    proficiency: string
-  }[]
-}
-
-interface MainAPIResult {
-  rocketReachData: string | null
-  perplexityData: PerplexityResponse | null
-  profileImage: string | null
-  linkedinUrl: string | null
-  combinedData: OpenAIResponse | null
-}
-
 // Add status emoji mapping
 const STATUS_EMOJIS = {
   rocketreach: '🚀',
@@ -342,309 +309,7 @@ export default function DragDropArea() {
     }
   }
 
-  const processEntry = async (entry: Entry): Promise<MainAPIResult> => {
-    try {
-      // First batch: Run main APIs in parallel
-      const mainPromises = []
-      const mainPromiseTypes: ('rocketreach' | 'perplexity')[] = []
-      
-      if (entry.runRocketReach) {
-        mainPromises.push(
-          processRocketReach(entry).then(result => {
-            // Update RocketReach result immediately
-            setEntries(current =>
-              current.map(e =>
-                e.id === entry.id ? {
-                  ...e,
-                  result: result,
-                  status: { ...e.status, rocketreach: 'completed' }
-                } : e
-              )
-            )
-            return result
-          })
-        )
-        mainPromiseTypes.push('rocketreach')
-      }
-
-      if (entry.runPerplexity) {
-        mainPromises.push(
-          processPerplexity(entry).then(result => {
-            // Update Perplexity result immediately
-            setEntries(current =>
-              current.map(e =>
-                e.id === entry.id ? {
-                  ...e,
-                  perplexityResult: result,
-                  status: { ...e.status, perplexity: 'completed' }
-                } : e
-              )
-            )
-            return result
-          })
-        )
-        mainPromiseTypes.push('perplexity')
-      }
-
-      // Second batch: Run Serper APIs in sequence (they're quick)
-      const serperPromises = []
-      const serperPromiseTypes: ('serper')[] = []
-      
-      if (entry.runProfileImage || entry.runLinkedin) {
-        const serperCalls = async () => {
-          const results: ProcessedResults = {}
-          if (entry.runProfileImage) {
-            try {
-              const { mainImage, allImages } = await fetchProfileImage(entry.name, entry.company)
-              // Update profile image immediately
-              setEntries(current =>
-                current.map(e =>
-                  e.id === entry.id ? {
-                    ...e,
-                    profileImage: mainImage,
-                    profileImageOptions: allImages,
-                    selectedImageIndex: 0,
-                    status: { ...e.status, profileImage: 'completed' }
-                  } : e
-                )
-              )
-              results['profileImage'] = mainImage
-            } catch (error) {
-              setEntries(current =>
-                current.map(e =>
-                  e.id === entry.id ? {
-                    ...e,
-                    status: { ...e.status, profileImage: 'error' },
-                    error: { ...e.error, profileImage: error instanceof Error ? error.message : 'Failed to fetch profile image' }
-                  } : e
-                )
-              )
-            }
-          }
-          if (entry.runLinkedin) {
-            try {
-              const linkedinUrl = await fetchLinkedinUrl(entry.name, entry.company)
-              // Update LinkedIn URL immediately
-              setEntries(current =>
-                current.map(e =>
-                  e.id === entry.id ? {
-                    ...e,
-                    linkedinUrl,
-                    status: { ...e.status, linkedin: 'completed' }
-                  } : e
-                )
-              )
-              results['linkedin'] = linkedinUrl
-            } catch (error) {
-              setEntries(current =>
-                current.map(e =>
-                  e.id === entry.id ? {
-                    ...e,
-                    status: { ...e.status, linkedin: 'error' },
-                    error: { ...e.error, linkedin: error instanceof Error ? error.message : 'Failed to fetch LinkedIn URL' }
-                  } : e
-                )
-              )
-            }
-          }
-          return results
-        }
-        serperPromises.push(serperCalls())
-        serperPromiseTypes.push('serper')
-      }
-
-      // Update status to processing for all selected APIs
-      setEntries(current =>
-        current.map(e =>
-          e.id === entry.id ? {
-            ...e,
-            status: {
-              ...e.status,
-              ...(e.runRocketReach && { rocketreach: 'processing' }),
-              ...(e.runPerplexity && { perplexity: 'processing' }),
-              ...(e.runProfileImage && { profileImage: 'processing' }),
-              ...(e.runLinkedin && { linkedin: 'processing' })
-            }
-          } : e
-        )
-      )
-
-      // Run all API calls in parallel
-      const [mainResults, serperResults] = await Promise.all([
-        Promise.allSettled(mainPromises),
-        Promise.allSettled(serperPromises)
-      ])
-      
-      // Process results from all APIs
-      const processedResults: ProcessedResults = {}
-      
-      // Process main API results
-      mainResults.forEach((result, index) => {
-        const apiType = mainPromiseTypes[index]
-        if (result.status === 'fulfilled') {
-          if (apiType === 'rocketreach') {
-            processedResults.rocketreach = result.value as string || null
-          } else if (apiType === 'perplexity') {
-            processedResults.perplexity = result.value as PerplexityResponse || null
-          }
-        } else {
-          setEntries(current =>
-            current.map(e =>
-              e.id === entry.id ? {
-                ...e,
-                status: { ...e.status, [apiType]: 'error' },
-                error: { ...e.error, [apiType]: result.reason?.message || 'API call failed' }
-              } : e
-            )
-          )
-        }
-      })
-
-      // Process Serper results
-      serperResults.forEach((result: PromiseSettledResult<ProcessedResults>) => {
-        if (result.status === 'fulfilled' && result.value) {
-          const serperData = result.value
-          if (serperData.profileImage) {
-            processedResults.profileImage = serperData.profileImage
-          }
-          if (serperData.linkedin) {
-            processedResults.linkedin = serperData.linkedin
-          }
-        } else {
-          if (entry.runProfileImage) {
-            setEntries(current =>
-              current.map(e =>
-                e.id === entry.id ? {
-                  ...e,
-                  status: { ...e.status, profileImage: 'error' },
-                  error: { ...e.error, profileImage: result.reason?.message || 'Failed to fetch profile image' }
-                } : e
-              )
-            )
-          }
-          if (entry.runLinkedin) {
-            setEntries(current =>
-              current.map(e =>
-                e.id === entry.id ? {
-                  ...e,
-                  status: { ...e.status, linkedin: 'error' },
-                  error: { ...e.error, linkedin: result.reason?.message || 'Failed to fetch LinkedIn URL' }
-                } : e
-              )
-            )
-          }
-        }
-      })
-
-      // Only call OpenAI if selected
-      if (entry.runOpenAI) {
-        try {
-          setEntries(current =>
-            current.map(e =>
-              e.id === entry.id ? {
-                ...e,
-                status: { ...e.status, openai: 'processing' }
-              } : e
-            )
-          )
-
-          console.log('Calling OpenAI API with data:', {
-            perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
-            rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
-            profileImage: entry.runProfileImage ? processedResults.profileImage : null,
-            linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
-            name: entry.name,
-            company: entry.company
-          })
-
-          const response = await fetch('/api/openai', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
-              rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
-              profileImage: entry.runProfileImage ? processedResults.profileImage : null,
-              linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
-              name: entry.name,
-              company: entry.company
-            })
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            console.error('OpenAI API error:', errorData)
-            throw new Error(errorData.error || `OpenAI API request failed with status ${response.status}`)
-          }
-
-          const combinedData = await response.json()
-          
-          // Validate the response structure
-          if (!combinedData || typeof combinedData !== 'object') {
-            throw new Error('Invalid response format from OpenAI API')
-          }
-
-          // Ensure required fields are present
-          const requiredFields = ['name', 'currentRole', 'keyAchievements', 'professionalBackground', 'careerHistory', 'expertiseAreas']
-          const missingFields = requiredFields.filter(field => !(field in combinedData))
-          if (missingFields.length > 0) {
-            throw new Error(`Missing required fields in OpenAI response: ${missingFields.join(', ')}`)
-          }
-
-          console.log('OpenAI API response:', combinedData)
-          
-          // Update entry with combined data immediately
-          setEntries(current => {
-            const newEntries = current.map(e =>
-              e.id === entry.id ? {
-                ...e,
-                combinedData: {
-                  ...combinedData,
-                  name: entry.name
-                },
-                status: { ...e.status, openai: 'completed' as const }
-              } : e
-            )
-            console.log('Updated entries:', newEntries)
-            return newEntries
-          })
-          
-          processedResults.openai = {
-            ...combinedData,
-            name: entry.name
-          }
-        } catch (error) {
-          console.error('OpenAI Error:', error)
-          const errorMessage = error instanceof Error ? error.message : 'OpenAI processing failed'
-          setEntries(current =>
-            current.map(e =>
-              e.id === entry.id ? {
-                ...e,
-                status: { ...e.status, openai: 'error' },
-                error: { ...e.error, openai: errorMessage }
-              } : e
-            )
-          )
-          // Don't throw the error, just log it and continue with other entries
-          console.error('Error processing OpenAI for entry:', entry.name, error)
-        }
-      }
-
-      return {
-        rocketReachData: processedResults.rocketreach || null,
-        perplexityData: processedResults.perplexity || null,
-        profileImage: processedResults.profileImage || null,
-        linkedinUrl: processedResults.linkedin || null,
-        combinedData: processedResults.openai || null
-      }
-    } catch (error) {
-      console.error("Error processing entry:", error)
-      throw error
-    }
-  }
-
-  const processRocketReach = async (entry: Entry) => {
+  const processRocketReach = async (entry: Entry): Promise<string> => {
     try {
       console.log('Starting to process entry:', entry.name)
       
@@ -1011,6 +676,15 @@ export default function DragDropArea() {
                   )
                 )
 
+                console.log('Calling OpenAI API with data:', {
+                  perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
+                  rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
+                  profileImage: entry.runProfileImage ? processedResults.profileImage : null,
+                  linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
+                  name: entry.name,
+                  company: entry.company
+                })
+
                 const response = await fetch('/api/openai', {
                   method: 'POST',
                   headers: {
@@ -1028,27 +702,46 @@ export default function DragDropArea() {
 
                 if (!response.ok) {
                   const errorData = await response.json().catch(() => ({}))
+                  console.error('OpenAI API error:', errorData)
                   throw new Error(errorData.error || `OpenAI API request failed with status ${response.status}`)
                 }
 
                 const combinedData = await response.json()
                 
+                // Validate the response structure
                 if (!combinedData || typeof combinedData !== 'object') {
                   throw new Error('Invalid response format from OpenAI API')
                 }
 
-                setEntries(current =>
-                  current.map(e =>
+                // Ensure required fields are present
+                const requiredFields = ['name', 'currentRole', 'keyAchievements', 'professionalBackground', 'careerHistory', 'expertiseAreas']
+                const missingFields = requiredFields.filter(field => !(field in combinedData))
+                if (missingFields.length > 0) {
+                  throw new Error(`Missing required fields in OpenAI response: ${missingFields.join(', ')}`)
+                }
+
+                console.log('OpenAI API response:', combinedData)
+                
+                // Update entry with combined data immediately
+                setEntries(current => {
+                  const newEntries = current.map(e =>
                     e.id === entry.id ? {
                       ...e,
                       combinedData: {
                         ...combinedData,
                         name: entry.name
                       },
-                      status: { ...e.status, openai: 'completed' }
+                      status: { ...e.status, openai: 'completed' as const }
                     } : e
                   )
-                )
+                  console.log('Updated entries:', newEntries)
+                  return newEntries
+                })
+                
+                processedResults.openai = {
+                  ...combinedData,
+                  name: entry.name
+                }
               } catch (error) {
                 console.error('OpenAI Error:', error)
                 const errorMessage = error instanceof Error ? error.message : 'OpenAI processing failed'
@@ -1061,6 +754,8 @@ export default function DragDropArea() {
                     } : e
                   )
                 )
+                // Don't throw the error, just log it and continue with other entries
+                console.error('Error processing OpenAI for entry:', entry.name, error)
               }
             })()
             
