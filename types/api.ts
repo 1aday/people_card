@@ -10,14 +10,38 @@ export interface SerperOrganicResult {
   link: string
   snippet: string
   position: number
+  [key: string]: string | number // For any additional fields with string or number values
 }
 
 export interface PerplexityResponse {
-  currentRole?: string
-  keyAchievements?: string[]
-  professionalBackground?: string
-  expertiseAreas?: string[]
-  [key: string]: any // For any additional fields
+  currentRole: string
+  keyAchievements: string[]
+  professionalBackground: string
+  careerHistory: {
+    title: string
+    company: string
+    duration: string
+    highlights: string[]
+  }[]
+  expertiseAreas: string[]
+  openai?: OpenAIResponse | null
+  [key: string]: string | string[] | { title: string; company: string; duration: string; highlights: string[]; }[] | OpenAIResponse | null | undefined
+}
+
+interface OpenAIResponse {
+  name: string
+  profilePhoto: string
+  linkedinURL: string
+  currentRole: string
+  keyAchievements: string[]
+  professionalBackground: string
+  careerHistory: {
+    title: string
+    company: string
+    duration: string
+    highlights: string[]
+  }[]
+  expertiseAreas: string[]
 }
 
 export interface ProcessedResults {
@@ -25,6 +49,6 @@ export interface ProcessedResults {
   perplexity?: PerplexityResponse | null
   profileImage?: string | null
   linkedin?: string | null
-  openai?: any | null
-  [key: string]: any
+  openai?: OpenAIResponse | null
+  [key: string]: string | PerplexityResponse | OpenAIResponse | null | undefined
 } 

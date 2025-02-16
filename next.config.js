@@ -1,11 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['*'], // Be more specific in production
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: '**', // This will allow all domains - you might want to restrict this in production
       },
     ],
   },

@@ -5,12 +5,13 @@ import { Card } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { Loader2 } from "lucide-react"
+import { Loader2, Plus, Minus, Download } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
 import { Textarea } from "./ui/textarea"
 import { SerperOrganicResult, PerplexityResponse } from '../types/api'
 import Image from 'next/image'
+import { LinkedinIcon } from "lucide-react"
 
 // Define SerperImageResult type
 interface SerperImageResult {
@@ -40,6 +41,15 @@ interface ProcessedResults {
       highlights: string[]
     }[]
     expertiseAreas: string[]
+    education?: {
+      degree: string
+      institution: string
+      year: string
+    }[]
+    languages?: {
+      language: string
+      proficiency: string
+    }[]
   } | null
 }
 
@@ -56,6 +66,8 @@ interface Entry {
   result?: string | null
   perplexityResult?: PerplexityResponse | null
   profileImage?: string | null
+  profileImageOptions?: string[]
+  selectedImageIndex?: number
   linkedinUrl?: string | null
   combinedData?: {
     name: string
@@ -71,6 +83,15 @@ interface Entry {
       highlights: string[]
     }[]
     expertiseAreas: string[]
+    education?: {
+      degree: string
+      institution: string
+      year: string
+    }[]
+    languages?: {
+      language: string
+      proficiency: string
+    }[]
   } | null
   status: {
     rocketreach: 'pending' | 'processing' | 'completed' | 'error'
@@ -91,6 +112,74 @@ interface Entry {
   runProfileImage: boolean
   runLinkedin: boolean
   runOpenAI: boolean
+}
+
+// Define types for API responses
+interface SerperResponse {
+  organic?: SerperOrganicResult[]
+  images?: SerperImageResult[]
+}
+
+interface PromiseSettledResult<T> {
+  status: 'fulfilled' | 'rejected'
+  value?: T
+  reason?: Error
+}
+
+interface OpenAIResponse {
+  name: string
+  profilePhoto: string
+  linkedinURL: string
+  currentRole: string
+  keyAchievements: string[]
+  professionalBackground: string
+  careerHistory: {
+    title: string
+    company: string
+    duration: string
+    highlights: string[]
+  }[]
+  expertiseAreas: string[]
+  education?: {
+    degree: string
+    institution: string
+    year: string
+  }[]
+  languages?: {
+    language: string
+    proficiency: string
+  }[]
+}
+
+interface MainAPIResult {
+  rocketReachData: string | null
+  perplexityData: PerplexityResponse | null
+  profileImage: string | null
+  linkedinUrl: string | null
+  combinedData: OpenAIResponse | null
+}
+
+// Add status emoji mapping
+const STATUS_EMOJIS = {
+  rocketreach: '🚀',
+  perplexity: '🧠',
+  profileImage: '🖼️',
+  linkedin: '💼',
+  openai: '🤖'
+} as const
+
+// Add status color mapping
+const getStatusColor = (status: 'pending' | 'processing' | 'completed' | 'error') => {
+  switch (status) {
+    case 'pending':
+      return 'text-gray-400'
+    case 'processing':
+      return 'text-blue-500'
+    case 'completed':
+      return 'text-green-500'
+    case 'error':
+      return 'text-red-500'
+  }
 }
 
 export default function DragDropArea() {
@@ -179,54 +268,58 @@ export default function DragDropArea() {
     )
   }
 
-  const fetchProfileImage = async (name: string, company: string): Promise<string | null> => {
+  const fetchProfileImage = async (name: string, company: string): Promise<{ mainImage: string | null, allImages: string[] }> => {
     try {
-      const response = await fetch("https://google.serper.dev/images", {
+      const response = await fetch("/api/serper", {
         method: "POST",
         headers: {
-          "X-API-KEY": process.env.NEXT_PUBLIC_SERPER_API_KEY!,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          q: `"${name}" ${company}`
+          searchType: 'images',
+          query: `${name} ${company}`
         })
       });
 
-      const data = await response.json();
-      
-      // Find the first image that looks like a profile picture
-      const profileImage = data.images?.find((image: SerperImageResult) => {
-        const isSquare = image.imageWidth === image.imageHeight;
-        const hasProfileKeyword = image.imageUrl.toLowerCase().includes('profile') || 
-                                 image.link.toLowerCase().includes('linkedin');
-        return isSquare && hasProfileKeyword;
-      });
-
-      if (!profileImage?.imageUrl) {
-        return null;
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
       }
 
-      return profileImage.imageUrl;
+      const data = await response.json() as SerperResponse;
+      
+      // Find up to 4 square images
+      const squareImages = data.images?.filter(image => 
+        image.imageWidth === image.imageHeight
+      ).slice(0, 4).map(image => image.imageUrl) || [];
+
+      return {
+        mainImage: squareImages[0] || null,
+        allImages: squareImages
+      };
     } catch (error) {
       console.error('Error fetching profile image:', error);
-      return null;
+      return { mainImage: null, allImages: [] };
     }
   }
 
   const fetchLinkedinUrl = async (name: string, company: string): Promise<string | null> => {
     try {
-      const response = await fetch("https://google.serper.dev/search", {
+      const response = await fetch("/api/serper", {
         method: "POST",
         headers: {
-          "X-API-KEY": process.env.NEXT_PUBLIC_SERPER_API_KEY!,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          q: `"${name}" ${company} site:linkedin.com`
+          searchType: 'search',
+          query: `"${name}" ${company} site:linkedin.com`
         })
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const data = await response.json() as SerperResponse;
       
       // Find the first result that matches our criteria
       const linkedinResult = data.organic?.find((result: SerperOrganicResult) => {
@@ -248,7 +341,7 @@ export default function DragDropArea() {
     }
   }
 
-  const processEntry = async (entry: Entry) => {
+  const processEntry = async (entry: Entry): Promise<MainAPIResult> => {
     try {
       // First batch: Run main APIs in parallel
       const mainPromises = []
@@ -301,18 +394,20 @@ export default function DragDropArea() {
           const results: ProcessedResults = {}
           if (entry.runProfileImage) {
             try {
-              const profileImage = await fetchProfileImage(entry.name, entry.company)
+              const { mainImage, allImages } = await fetchProfileImage(entry.name, entry.company)
               // Update profile image immediately
               setEntries(current =>
                 current.map(e =>
                   e.id === entry.id ? {
                     ...e,
-                    profileImage,
+                    profileImage: mainImage,
+                    profileImageOptions: allImages,
+                    selectedImageIndex: 0,
                     status: { ...e.status, profileImage: 'completed' }
                   } : e
                 )
               )
-              results['profileImage'] = profileImage
+              results['profileImage'] = mainImage
             } catch (error) {
               setEntries(current =>
                 current.map(e =>
@@ -386,7 +481,11 @@ export default function DragDropArea() {
       mainResults.forEach((result, index) => {
         const apiType = mainPromiseTypes[index]
         if (result.status === 'fulfilled') {
-          processedResults[apiType] = result.value
+          if (apiType === 'rocketreach') {
+            processedResults.rocketreach = result.value as string || null
+          } else if (apiType === 'perplexity') {
+            processedResults.perplexity = result.value as PerplexityResponse || null
+          }
         } else {
           setEntries(current =>
             current.map(e =>
@@ -401,9 +500,9 @@ export default function DragDropArea() {
       })
 
       // Process Serper results
-      serperResults.forEach(result => {
-        if (result.status === 'fulfilled') {
-          const serperData = result.value as ProcessedResults
+      serperResults.forEach((result: PromiseSettledResult<ProcessedResults>) => {
+        if (result.status === 'fulfilled' && result.value) {
+          const serperData = result.value
           if (serperData.profileImage) {
             processedResults.profileImage = serperData.profileImage
           }
@@ -448,19 +547,27 @@ export default function DragDropArea() {
             )
           )
 
+          console.log('Calling OpenAI API with data:', {
+            perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
+            rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
+            profileImage: entry.runProfileImage ? processedResults.profileImage : null,
+            linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
+            name: entry.name,
+            company: entry.company
+          })
+
           const response = await fetch('/api/openai', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              // Send empty/null values for failed APIs
               perplexityData: entry.runPerplexity ? processedResults.perplexity : null,
               rocketReachData: entry.runRocketReach ? processedResults.rocketreach : null,
               profileImage: entry.runProfileImage ? processedResults.profileImage : null,
               linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
-              name: entry.name,  // Always send name
-              company: entry.company  // Always send company
+              name: entry.name,
+              company: entry.company
             })
           })
 
@@ -468,25 +575,28 @@ export default function DragDropArea() {
             throw new Error('OpenAI API request failed')
           }
 
-          const combinedData = await response.json()
+          const combinedData = await response.json() as OpenAIResponse
+          console.log('OpenAI API response:', combinedData)
           
           // Update entry with combined data immediately
-          setEntries(current =>
-            current.map(e =>
+          setEntries(current => {
+            const newEntries = current.map(e =>
               e.id === entry.id ? {
                 ...e,
                 combinedData: {
                   ...combinedData,
-                  name: entry.name // Add name from entry
+                  name: entry.name
                 },
-                status: { ...e.status, openai: 'completed' }
+                status: { ...e.status, openai: 'completed' as const }
               } : e
             )
-          )
+            console.log('Updated entries:', newEntries)
+            return newEntries
+          })
           
           processedResults.openai = {
             ...combinedData,
-            name: entry.name // Add name here too
+            name: entry.name
           }
         } catch (error) {
           console.error('OpenAI Error:', error)
@@ -531,28 +641,30 @@ export default function DragDropArea() {
       const query = `site:rocketreach.co ${entry.name} ${entry.company}`
       console.log('Searching with query:', query)
       
-      // 2. Call Serper API
-      const serperResponse = await fetch("https://google.serper.dev/search", {
+      // 2. Call Serper API through our server endpoint
+      const serperResponse = await fetch("/api/serper", {
         method: "POST",
         headers: {
-          "X-API-KEY": process.env.NEXT_PUBLIC_SERPER_API_KEY!,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ q: query }),
-      })
+        body: JSON.stringify({
+          searchType: 'search',
+          query: query
+        })
+      });
 
       if (!serperResponse.ok) {
-        throw new Error(`Serper API error: ${serperResponse.statusText}`)
+        throw new Error(`API error: ${serperResponse.statusText}`)
       }
 
-      const data: { organic: SerperOrganicResult[] } = await serperResponse.json()
+      const data = await serperResponse.json()
       console.log('Serper response:', data)
 
       // 3. Find matching result
-      const matchingResult = data.organic?.find(result => 
+      const matchingResult = data.organic?.find((result: SerperOrganicResult) => 
         result.snippet.toLowerCase().includes(entry.name.toLowerCase()) && 
         result.snippet.toLowerCase().includes(entry.company.toLowerCase())
-      )
+      );
 
       if (!matchingResult) {
         return '(No RocketReach data found)'
@@ -560,23 +672,20 @@ export default function DragDropArea() {
 
       console.log('Found matching result:', matchingResult)
 
-      // 4. Call Firecrawl API with the matching URL
+      // 4. Call Firecrawl API through our server endpoint
       console.log('Calling Firecrawl with URL:', matchingResult.link)
-      const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      const firecrawlResponse = await fetch("/api/firecrawl", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY}`,
         },
         body: JSON.stringify({
-          url: matchingResult.link,
-          formats: ["markdown"],
-          includeTags: [".history"]
+          url: matchingResult.link
         }),
       })
 
       if (!firecrawlResponse.ok) {
-        throw new Error(`Firecrawl API error: ${firecrawlResponse.statusText}`)
+        throw new Error(`API error: ${firecrawlResponse.statusText}`)
       }
 
       const scrapeResult = await firecrawlResponse.json()
@@ -605,7 +714,7 @@ export default function DragDropArea() {
     }
   }
 
-  const processPerplexity = async (entry: Entry) => {
+  const processPerplexity = async (entry: Entry): Promise<PerplexityResponse> => {
     try {
       console.log('Calling Perplexity API for:', entry.name)
 
@@ -753,6 +862,75 @@ export default function DragDropArea() {
     })
   }
 
+  const handleExportCSV = () => {
+    // Only export entries that have completed OpenAI processing
+    const completedEntries = entries.filter(e => e.combinedData)
+    
+    if (completedEntries.length === 0) {
+      alert('No completed cards to export')
+      return
+    }
+
+    // Define CSV headers based on card components
+    const headers = [
+      'Name',
+      'Current Role',
+      'LinkedIn URL',
+      'Professional Background',
+      'Key Achievements',
+      'Expertise Areas',
+      'Career History',
+      'Education',
+      'Languages'
+    ]
+
+    // Convert data to CSV rows
+    const rows = completedEntries.map(entry => {
+      const data = entry.combinedData!
+      return [
+        data.name,
+        data.currentRole,
+        data.linkedinURL,
+        data.professionalBackground,
+        data.keyAchievements.join('|'),
+        data.expertiseAreas.join('|'),
+        data.careerHistory.map(h => 
+          `${h.title} at ${h.company} (${h.duration}): ${h.highlights.join('; ')}`
+        ).join('|'),
+        data.education ? data.education.map(e => 
+          `${e.degree} from ${e.institution} (${e.year})`
+        ).join('|') : '',
+        data.languages ? data.languages.map(l => 
+          `${l.language} - ${l.proficiency}`
+        ).join('|') : ''
+      ]
+    })
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => 
+        row.map(cell => 
+          // Escape special characters and wrap in quotes if needed
+          typeof cell === 'string' && (cell.includes(',') || cell.includes('"') || cell.includes('\n')) 
+            ? `"${cell.replace(/"/g, '""')}"` 
+            : cell
+        ).join(',')
+      )
+    ].join('\n')
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `people_cards_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="space-y-8">
       <Card className="p-6">
@@ -797,25 +975,6 @@ export default function DragDropArea() {
             >
               Add Single Entry
             </Button>
-            {entries.length > 0 && (
-              <Button
-                onClick={handleProcessAll}
-                disabled={isProcessing || entries.every(e => 
-                  (!e.runRocketReach || e.status.rocketreach === 'completed') &&
-                  (!e.runPerplexity || e.status.perplexity === 'completed') &&
-                  (!e.runProfileImage || e.status.profileImage === 'completed') &&
-                  (!e.runLinkedin || e.status.linkedin === 'completed') &&
-                  (!e.runOpenAI || e.status.openai === 'completed')
-                )}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : 'Process All'}
-              </Button>
-            )}
           </div>
         </div>
       </Card>
@@ -823,15 +982,45 @@ export default function DragDropArea() {
       {entries.length > 0 && (
         <div className="space-y-8">
           <Card className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold">People to Process ({entries.length})</h2>
+              <div className="flex space-x-4">
+                <Button
+                  variant="outline"
+                  onClick={handleExportCSV}
+                  className="w-40"
+                  disabled={!entries.some(e => e.combinedData)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+                <Button
+                  onClick={handleProcessAll}
+                  disabled={isProcessing || entries.every(e => 
+                    (!e.runRocketReach || e.status.rocketreach === 'completed') &&
+                    (!e.runPerplexity || e.status.perplexity === 'completed') &&
+                    (!e.runProfileImage || e.status.profileImage === 'completed') &&
+                    (!e.runLinkedin || e.status.linkedin === 'completed') &&
+                    (!e.runOpenAI || e.status.openai === 'completed')
+                  )}
+                  className="w-40"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : 'Process All'}
+                </Button>
+              </div>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>APIs to Run</TableHead>
-                  <TableHead>RocketReach Status</TableHead>
-                  <TableHead>Perplexity Status</TableHead>
-                  <TableHead>Profile Image Status</TableHead>
-                  <TableHead>LinkedIn URL</TableHead>
+                  <TableHead>Data Progress</TableHead>
+                  <TableHead>Card Generation</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -914,95 +1103,56 @@ export default function DragDropArea() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <span className={
-                            !entry.runRocketReach ? 'text-gray-400 italic' :
-                            entry.status.rocketreach === 'pending' ? 'text-gray-500' :
-                            entry.status.rocketreach === 'processing' ? 'text-blue-500' :
-                            entry.status.rocketreach === 'completed' ? 'text-green-500' :
-                            'text-red-500'
-                          }>
-                            {!entry.runRocketReach ? 'Not Selected' :
-                             entry.status.rocketreach.charAt(0).toUpperCase() + entry.status.rocketreach.slice(1)}
-                            {entry.runRocketReach && entry.status.rocketreach === 'processing' && (
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin inline" />
-                            )}
-                          </span>
-                          {entry.result && (
-                            <div className="text-xs text-gray-600 truncate max-w-[200px]">
-                              {entry.result}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className={
-                            !entry.runPerplexity ? 'text-gray-400 italic' :
-                            entry.status.perplexity === 'pending' ? 'text-gray-500' :
-                            entry.status.perplexity === 'processing' ? 'text-blue-500' :
-                            entry.status.perplexity === 'completed' ? 'text-green-500' :
-                            'text-red-500'
-                          }>
-                            {!entry.runPerplexity ? 'Not Selected' :
-                             entry.status.perplexity.charAt(0).toUpperCase() + entry.status.perplexity.slice(1)}
-                            {entry.runPerplexity && entry.status.perplexity === 'processing' && (
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin inline" />
-                            )}
-                          </span>
-                          {entry.perplexityResult && (
-                            <div className="text-xs text-gray-600 truncate max-w-[200px]">
-                              {JSON.stringify(entry.perplexityResult)}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className={
-                            !entry.runProfileImage ? 'text-gray-400 italic' :
-                            entry.status.profileImage === 'pending' ? 'text-gray-500' :
-                            entry.status.profileImage === 'processing' ? 'text-blue-500' :
-                            entry.status.profileImage === 'completed' ? 'text-green-500' :
-                            'text-red-500'
-                          }>
-                            {!entry.runProfileImage ? 'Not Selected' :
-                             entry.status.profileImage.charAt(0).toUpperCase() + entry.status.profileImage.slice(1)}
-                            {entry.runProfileImage && entry.status.profileImage === 'processing' && (
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin inline" />
-                            )}
-                          </span>
-                          {entry.profileImage && (
-                            <div className="text-xs text-gray-600 truncate max-w-[200px]">
-                              {entry.profileImage.slice(0, 50)}...
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className={
-                            !entry.runLinkedin ? 'text-gray-400 italic' :
-                            entry.status.linkedin === 'pending' ? 'text-gray-500' :
-                            entry.status.linkedin === 'processing' ? 'text-blue-500' :
-                            entry.status.linkedin === 'completed' ? 'text-green-500' :
-                            'text-red-500'
-                          }>
-                            {!entry.runLinkedin ? 'Not Selected' :
-                             entry.status.linkedin.charAt(0).toUpperCase() + entry.status.linkedin.slice(1)}
-                            {entry.runLinkedin && entry.status.linkedin === 'processing' && (
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin inline" />
-                            )}
-                          </span>
+                        <div className="flex items-center space-x-2">
+                          {(['rocketreach', 'perplexity', 'profileImage', 'linkedin'] as Array<keyof typeof STATUS_EMOJIS>).map((api) => (
+                            entry[`run${api.charAt(0).toUpperCase() + api.slice(1)}` as keyof Entry] && (
+                              <div 
+                                key={api}
+                                className={`flex items-center ${getStatusColor(entry.status[api])}`}
+                                title={`${api.charAt(0).toUpperCase() + api.slice(1)}: ${entry.status[api]}`}
+                              >
+                                <span className="text-lg">
+                                  {STATUS_EMOJIS[api]}
+                                  {entry.status[api] === 'processing' && (
+                                    <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                  )}
+                                </span>
+                              </div>
+                            )
+                          ))}
                           {entry.linkedinUrl && (
                             <a 
                               href={entry.linkedinUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-500 hover:underline truncate block max-w-[200px]"
+                              className="text-blue-500 hover:underline ml-2"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              {entry.linkedinUrl}
+                              <LinkedinIcon className="w-4 h-4" />
                             </a>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {entry.runOpenAI && (
+                            <div 
+                              className={`flex items-center ${getStatusColor(entry.status.openai)}`}
+                              title={`OpenAI: ${entry.status.openai}`}
+                            >
+                              <span className="text-lg">
+                                {STATUS_EMOJIS.openai}
+                                {entry.status.openai === 'processing' && (
+                                  <Loader2 className="ml-1 h-3 w-3 animate-spin inline" />
+                                )}
+                              </span>
+                              <span className="ml-2 text-sm">
+                                {entry.status.openai === 'completed' ? 'Card Ready' : 
+                                 entry.status.openai === 'processing' ? 'Generating...' :
+                                 entry.status.openai === 'error' ? 'Failed' :
+                                 'Waiting'}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </TableCell>
@@ -1050,7 +1200,24 @@ export default function DragDropArea() {
             {entries.map((entry) => (
               entry.combinedData && (
                 <div key={entry.id} className="w-full">
-                  <ProfileCard data={entry.combinedData} />
+                  <ProfileCard 
+                    data={entry.combinedData}
+                    imageOptions={entry.profileImageOptions}
+                    onImageSelect={(imageUrl) => {
+                      setEntries(current =>
+                        current.map(e =>
+                          e.id === entry.id ? {
+                            ...e,
+                            profileImage: imageUrl,
+                            combinedData: {
+                              ...e.combinedData!,
+                              profilePhoto: imageUrl
+                            }
+                          } : e
+                        )
+                      )
+                    }}
+                  />
                 </div>
               )
             ))}
