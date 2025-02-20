@@ -45,7 +45,8 @@ export async function POST(request: Request) {
           professional_background: person.professionalBackground,
           career_history: person.careerHistory,
           expertise_areas: person.expertiseAreas,
-          profile_image_options: person.profile_image_options  // Verify this is being passed
+          profile_image_options: person.profile_image_options,
+          citations: person.citations || {}  // Add citations field with default empty object
         })),
         { onConflict: 'project_name,name' }
       )

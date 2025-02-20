@@ -8,7 +8,7 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    // Get distinct project names with their latest created_at using a single query
+    // Get all projects with their cards
     const { data: projects, error } = await supabase
       .from('people_cards')
       .select('project_name, created_at')
@@ -19,15 +19,20 @@ export async function GET() {
       throw error
     }
 
-    // Process the results to get unique projects with their latest timestamp
+    // Process the results to get unique projects with their latest timestamp and count
     const projectMap = new Map()
     projects?.forEach(project => {
       if (!projectMap.has(project.project_name)) {
         projectMap.set(project.project_name, {
           name: project.project_name,
-          created_at: project.created_at
+          created_at: project.created_at,
+          count: 0
         })
       }
+      // Increment the count for this project
+      const projectData = projectMap.get(project.project_name)
+      projectData.count++
+      projectMap.set(project.project_name, projectData)
     })
 
     // Convert map to array and sort by created_at

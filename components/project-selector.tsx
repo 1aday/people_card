@@ -24,14 +24,13 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
   const [newProjectName, setNewProjectName] = useState("")
   const [isCreating, setIsCreating] = useState(false)
 
-  // Enhanced error handling for project loading
+  // Load projects with error handling
   const fetchProjects = useCallback(async () => {
     try {
       console.log('Fetching projects...');
       const response = await fetch('/api/list-projects');
       console.log('Response status:', response.status);
       
-      // If not OK, try to get the error text
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API Error Response:', {
@@ -39,18 +38,15 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
           statusText: response.statusText,
           body: errorText
         });
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        return []; // Return empty array instead of throwing
       }
 
-      // Try to parse JSON
       let data;
       try {
         data = await response.json();
       } catch (e) {
         console.error('JSON Parse Error:', e);
-        const text = await response.text();
-        console.error('Raw Response:', text);
-        throw new Error('Invalid JSON response from server');
+        return []; // Return empty array on parse error
       }
 
       if (!data || !Array.isArray(data.projects)) {
@@ -58,12 +54,11 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
         return [];
       }
 
-      console.log('Fetched projects:', data.projects);
       return data.projects;
     } catch (error) {
       console.error('Error loading projects:', error);
-      toast.error(error instanceof Error ? error.message : 'Unable to load projects');
-      return [];
+      toast.error('Unable to load existing projects');
+      return []; // Return empty array on any error
     }
   }, []);
 
@@ -114,21 +109,27 @@ export function ProjectSelector({ value, onChange, disabled }: ProjectSelectorPr
 
     setIsCreating(true);
     try {
-      // Check if project already exists
+      // Check if project already exists locally
       if (projects.some(p => p.name.toLowerCase() === newProjectName.toLowerCase())) {
         toast.error('A project with this name already exists');
         setIsCreating(false);
         return;
       }
 
-      // Create new project
+      // Instead of creating in DB immediately, just update local state
+      const newProject = {
+        name: newProjectName,
+        created_at: new Date().toISOString()
+      };
+
+      // Update local projects list
+      setProjects([...projects, newProject]);
+      
+      // Set as selected project
       onChange(newProjectName);
       setShowNewProjectDialog(false);
       toast.success('New project created successfully');
 
-      // Refresh projects list
-      const updatedProjects = await fetchProjects();
-      setProjects(updatedProjects);
     } catch (error) {
       console.error('Error creating project:', error);
       toast.error('Failed to create project');

@@ -177,6 +177,7 @@ interface DragDropAreaProps {
   projectName: string | undefined
   onProjectChange?: (projectName: string) => void
   disabled: boolean
+  isViewMode?: boolean
 }
 
 // Update the component definition
@@ -184,7 +185,8 @@ export default function DragDropArea({
   onCardsUpdate, 
   projectName, 
   onProjectChange,
-  disabled 
+  disabled,
+  isViewMode = false 
 }: DragDropAreaProps) {
   const [entriesToProcess, setEntriesToProcess] = useState<Entry[]>([])
   const [processedEntries, setProcessedEntries] = useState<Entry[]>([])
@@ -259,11 +261,12 @@ export default function DragDropArea({
         const projectExists = projectsData.projects.some((p: any) => p.name === projectName);
         
         if (!projectExists) {
-          console.error('Project not found:', projectName);
-          toast.error(`Project "${projectName}" not found`);
-          // Only clear if we're mounted and the project name hasn't changed
-          if (isMounted && onProjectChange) {
-            onProjectChange('');
+          // Instead of showing an error, just clear the entries
+          // This allows for creating new projects
+          console.log('Project does not exist yet:', projectName);
+          if (isMounted) {
+            setProcessedEntries([]);
+            setEntriesToProcess([]);
           }
           return;
         }
@@ -305,7 +308,9 @@ export default function DragDropArea({
             keyAchievements: card.key_achievements || [],
             professionalBackground: card.professional_background || '',
             careerHistory: card.career_history || [],
-            expertiseAreas: card.expertise_areas || []
+            expertiseAreas: card.expertise_areas || [],
+            profile_image_options: card.profile_image_options || [],
+            citations: card.citations || {}  // Add citations here
           },
           status: {
             rocketreach: 'completed',
@@ -480,7 +485,7 @@ export default function DragDropArea({
         },
         body: JSON.stringify({
           searchType: 'images',
-          query: `${name} ${company}`
+          query: `${name} ${company} professional headshot`
         })
       });
 
@@ -490,31 +495,10 @@ export default function DragDropArea({
 
       const data = await response.json() as SerperResponse;
       
-      // Get all qualifying images first
+      // Get all valid images from the response
       const validImages = (data.images || [])
-        .filter(image => {
-          if (!image.imageWidth || !image.imageHeight) {
-            return false;
-          }
-          
-          const ratio = image.imageWidth / image.imageHeight;
-          const isSquarish = ratio >= 0.95 && ratio <= 1.05;
-          
-          const hasValidSize = image.imageWidth >= 200 && image.imageWidth <= 1500 && 
-                             image.imageHeight >= 200 && image.imageHeight <= 1500;
-          
-          let isValidUrl = false;
-          try {
-            new URL(image.imageUrl);
-            isValidUrl = true;
-          } catch {
-            isValidUrl = false;
-          }
-          
-          return isSquarish && hasValidSize && isValidUrl;
-        })
         .map(image => image.imageUrl)
-        .slice(0, 4);  // Limit to 4 images
+        .filter(url => url && url !== '');  // Filter out empty URLs
 
       // Get the first valid image as main image
       const mainImage = validImages.length > 0 ? validImages[0] : null;
@@ -706,7 +690,23 @@ export default function DragDropArea({
         body: JSON.stringify({
           messages: [{
             role: "user",
-            content: `Find information about ${entry.name} who works at ${entry.company}. Return the information in this exact JSON structure. Include at least 3-5 expertise areas, and provide a detailed professional background covering their career progression: { currentRole: "string - detailed current position", keyAchievements: [ string - notable accomplishments in current and past roles ], professionalBackground: "string - comprehensive career narrative", careerHistory: [ { title: "string - job title", company: "string - company name", duration: "string - time period", highlights: [ string - key responsibilities and achievements ] } ], expertiseAreas: [ string - 3 to 5 specific areas of expertise ] }`
+            content: `Find information about ${entry.name} who works at ${entry.company}. Return the information in this exact JSON structure. Include at least 3-5 expertise areas, provide a detailed professional background covering their career progression, and include citations with links to your sources: {
+              currentRole: "string - detailed current position",
+              keyAchievements: [ "string - notable accomplishments in current and past roles" ],
+              professionalBackground: "string - comprehensive career narrative",
+              careerHistory: [
+                {
+                  title: "string - job title",
+                  company: "string - company name",
+                  duration: "string - time period",
+                  highlights: [ "string - key responsibilities and achievements" ]
+                }
+              ],
+              expertiseAreas: [ "string - 3 to 5 specific areas of expertise" ],
+              citations: {
+                "string - source name or description": "string - URL or reference to the source"
+              }
+            }`
           }]
         })
       })
@@ -790,7 +790,10 @@ export default function DragDropArea({
       duration: 'Present',
       highlights: ['Information not available']
     }],
-    expertiseAreas: ['Information not available']
+    expertiseAreas: ['Information not available'],
+    citations: {
+      'No sources available': 'Information could not be retrieved'
+    }
   })
 
   const handleProcessAll = async () => {
@@ -1020,7 +1023,26 @@ export default function DragDropArea({
                     profileImage: entry.runProfileImage ? processedResults.profileImage : null,
                     linkedinUrl: entry.runLinkedin ? processedResults.linkedin : null,
                     name: entry.name,
-                    company: entry.company
+                    company: entry.company,
+                    responseSchema: {
+                      name: "string - person's full name",
+                      profilePhoto: "string - URL of profile photo",
+                      linkedinURL: "string - LinkedIn profile URL",
+                      currentRole: "string - detailed current position",
+                      conciseRole: "string - brief version of current role",
+                      keyAchievements: ["string - notable accomplishments"],
+                      professionalBackground: "string - comprehensive career narrative",
+                      careerHistory: [{
+                        title: "string - job title",
+                        company: "string - company name",
+                        duration: "string - time period",
+                        highlights: ["string - key responsibilities and achievements"]
+                      }],
+                      expertiseAreas: ["string - areas of expertise"],
+                      citations: {
+                        "string - source name or description": "string - URL or reference to source"
+                      }
+                    }
                   })
                 })
 
@@ -1046,6 +1068,14 @@ export default function DragDropArea({
 
                 console.log('OpenAI API response:', combinedData)
                 
+                // Ensure citations are properly merged and stored
+                const mergedCitations = {
+                  ...(combinedData.citations || {}),
+                  ...(entry.perplexityResult?.citations || {})
+                }
+
+                console.log('Merged citations:', mergedCitations)  // Debug log
+
                 // First set the combinedData regardless of project name
                 setEntriesToProcess(current =>
                   current.map(e =>
@@ -1062,7 +1092,8 @@ export default function DragDropArea({
                         professionalBackground: combinedData.professionalBackground || 'Not specified',
                         careerHistory: combinedData.careerHistory || [],
                         expertiseAreas: combinedData.expertiseAreas || [],
-                        profile_image_options: entry.profileImageOptions || []  // Include all profile image options
+                        profile_image_options: entry.profileImageOptions || [],
+                        citations: mergedCitations  // Use the merged citations
                       }
                     } : e
                   )
@@ -1079,7 +1110,11 @@ export default function DragDropArea({
                   professionalBackground: combinedData.professionalBackground || 'Not specified',
                   careerHistory: combinedData.careerHistory || [],
                   expertiseAreas: combinedData.expertiseAreas || [],
-                  profile_image_options: entry.profileImageOptions || []  // Include all profile image options
+                  profile_image_options: entry.profileImageOptions || [],
+                  citations: {
+                    ...(combinedData.citations || {}),  // Include OpenAI citations
+                    ...(entry.perplexityResult?.citations || {})  // Include Perplexity citations
+                  }
                 };
 
                 // Only save to database if project name exists
@@ -1115,7 +1150,8 @@ export default function DragDropArea({
                           name: card.name,
                           projectName,
                           hasProfileImage: !!card.profilePhoto,
-                          imageOptionsCount: card.profile_image_options?.length || 0
+                          imageOptionsCount: card.profile_image_options?.length || 0,
+                          citations: card.citations  // Log citations on error
                         }
                       });
                       throw new Error(responseData.error || `Failed to save card: ${response.statusText}`);
@@ -1123,7 +1159,8 @@ export default function DragDropArea({
 
                     console.log('Card saved successfully:', {
                       responseData,
-                      savedCard: responseData.data?.[0]
+                      savedCard: responseData.data?.[0],
+                      citations: responseData.data?.[0]?.citations  // Log saved citations
                     });
 
                     // Update the database ID after saving
@@ -1791,6 +1828,70 @@ export default function DragDropArea({
     )
   }
 
+  const handleSaveCards = async (cards: PersonCard[]) => {
+    if (!projectName) {
+      toast.error('Please select a project first')
+      return
+    }
+
+    try {
+      // First try to save the cards
+      const response = await fetch('/api/save-people-cards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_name: projectName,
+          people: cards
+        })
+      })
+
+      if (!response.ok) {
+        // If it fails because project doesn't exist, create it first
+        if (response.status === 404) {
+          // Create project
+          const createProjectResponse = await fetch('/api/create-project', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: projectName,
+            })
+          });
+
+          if (!createProjectResponse.ok) {
+            throw new Error('Failed to create project');
+          }
+
+          // Try saving cards again
+          const retryResponse = await fetch('/api/save-people-cards', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              project_name: projectName,
+              people: cards
+            })
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error('Failed to save cards after creating project');
+          }
+        } else {
+          throw new Error('Failed to save cards');
+        }
+      }
+
+      toast.success('Cards saved successfully')
+    } catch (error) {
+      console.error('Error saving cards:', error)
+      toast.error('Failed to save cards')
+    }
+  }
+
   return (
     <div className="space-y-8">
       <Card className="p-6">
@@ -2242,7 +2343,7 @@ export default function DragDropArea({
                           careerHistory: entry.combinedData.careerHistory || [],
                           expertiseAreas: entry.combinedData.expertiseAreas || [],
                           profile_image_options: entry.profileImageOptions || [],
-                          citations: entry.combinedData.citations || {}
+                          citations: entry.combinedData.citations || {}  // Make sure citations are passed correctly
                         }}
                         projectName={projectName || ''}
                         onDelete={() => {

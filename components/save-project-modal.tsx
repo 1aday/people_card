@@ -24,33 +24,65 @@ export function SaveProjectModal({ isOpen, onClose, cards, onSave, initialProjec
   }, [isOpen, initialProjectName])
 
   const handleSave = async () => {
-    if (!initialProjectName) {
-      toast.error('No project name set')
+    if (!cards || cards.length === 0) {
+      toast.error('No cards to save')
       return
     }
 
     setIsSaving(true)
-
     try {
+      // Try to save cards (this will create project if needed)
       const response = await fetch('/api/save-people-cards', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          project_name: initialProjectName,
+          project_name: projectName,
           people: cards
         })
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to save project')
+        // If project doesn't exist, create it first
+        if (response.status === 404) {
+          const createProjectResponse = await fetch('/api/create-project', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: projectName,
+            })
+          });
+
+          if (!createProjectResponse.ok) {
+            throw new Error('Failed to create project');
+          }
+
+          // Try saving cards again
+          const retryResponse = await fetch('/api/save-people-cards', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              project_name: projectName,
+              people: cards
+            })
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error('Failed to save cards after creating project');
+          }
+        } else {
+          throw new Error('Failed to save cards');
+        }
       }
 
-      toast.success(`Successfully saved ${cards.length} cards to project "${data.project_name}"`)
+      toast.success('Project saved successfully')
       onSave()
+      onClose()
     } catch (error) {
       console.error('Error saving project:', error)
       toast.error('Failed to save project')

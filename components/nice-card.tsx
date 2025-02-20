@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card } from "./ui/card"
-import { LinkedinIcon, Loader2, Trash2, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp, Building2, Briefcase, Award, Sparkles, GraduationCap, MapPin, Clock, ExternalLink } from "lucide-react"
+import { LinkedinIcon, Loader2, Trash2, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp, Building2, Briefcase, Award, Sparkles, GraduationCap, MapPin, Clock, ExternalLink, Minus, Edit as EditIcon } from "lucide-react"
 import Image from 'next/image'
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -47,10 +47,12 @@ const TAG_GRADIENTS = [
 
 export function NiceCard({ data, projectName, onDelete, onImageSelect, onTagClick }: NiceCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
   const [showAllAchievements, setShowAllAchievements] = useState(false)
   const [showAllHistory, setShowAllHistory] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   // Ensure we have valid data
   const safeData = {
@@ -212,31 +214,26 @@ export function NiceCard({ data, projectName, onDelete, onImageSelect, onTagClic
               <Award className="w-4 h-4 text-blue-500" />
               Key Achievements
             </h4>
-            <AnimatePresence initial={false}>
-              <div className="space-y-2">
-                {safeData.keyAchievements
-                  .slice(0, showAllAchievements ? undefined : 2)
-                  .map((achievement, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.2, delay: index * 0.1 }}
-                      className="flex gap-3"
-                    >
-                      <div className="w-1 h-1 rounded-full bg-blue-500 mt-2 opacity-60" />
-                      <p className="text-sm text-gray-600 leading-relaxed flex-1">
-                        {achievement}
-                      </p>
-                    </motion.div>
-                  ))}
-              </div>
-            </AnimatePresence>
+            <div className="space-y-2">
+              {safeData.keyAchievements
+                .slice(0, showAllAchievements ? undefined : 2)
+                .map((achievement, index) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <div className="w-1 h-1 rounded-full bg-blue-500/60 mt-2" />
+                    <p className="text-sm text-gray-600 flex-1">
+                      {achievement}
+                    </p>
+                  </div>
+                ))}
+            </div>
             {safeData.keyAchievements.length > 2 && (
               <button
-                onClick={() => setShowAllAchievements(!showAllAchievements)}
-                className="text-sm text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowAllAchievements(!showAllAchievements);
+                }}
+                className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 {showAllAchievements ? (
                   <>Show Less <ChevronUp className="w-4 h-4" /></>
@@ -272,12 +269,9 @@ export function NiceCard({ data, projectName, onDelete, onImageSelect, onTagClic
                     {position.highlights && position.highlights.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {position.highlights.map((highlight, hIndex) => (
-                          <li
-                            key={hIndex}
-                            className="text-sm text-gray-600 flex items-start gap-2"
-                          >
+                          <li key={hIndex} className="flex items-start gap-2">
                             <div className="w-1 h-1 rounded-full bg-gray-400 mt-2" />
-                            {highlight}
+                            <span className="text-sm text-gray-600">{highlight}</span>
                           </li>
                         ))}
                       </ul>
@@ -287,8 +281,12 @@ export function NiceCard({ data, projectName, onDelete, onImageSelect, onTagClic
             </div>
             {safeData.careerHistory.length > 1 && (
               <button
-                onClick={() => setShowAllHistory(!showAllHistory)}
-                className="text-sm text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowAllHistory(!showAllHistory);
+                }}
+                className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 {showAllHistory ? (
                   <>Show Less <ChevronUp className="w-4 h-4" /></>
@@ -301,14 +299,78 @@ export function NiceCard({ data, projectName, onDelete, onImageSelect, onTagClic
         )}
       </div>
 
+      {/* Citations Drawer */}
+      {safeData.citations && Object.keys(safeData.citations).length > 0 && (
+        <div className="border-t border-gray-100">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              setIsExpanded(!isExpanded);
+            }}
+            className="w-full px-6 py-2 flex items-center justify-between hover:bg-gray-50/80 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-medium text-gray-600">Sources & Citations</span>
+            </div>
+            <ChevronDown 
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                isExpanded ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          <AnimatePresence initial={false}>
+            {isExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-3 space-y-2">
+                  {Object.entries(safeData.citations).map(([source, url], index) => (
+                    <div key={index} className="flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-amber-400/60 mt-2" />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-600">{source}</div>
+                        {url.startsWith('http') ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-500 hover:text-blue-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            {url}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <p className="text-sm text-gray-500">{url}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
       {/* Delete Button */}
       {onDelete && (
         <motion.button
+          type="button"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={handleDelete}
+          onClick={(e) => {
+            e.preventDefault();
+            handleDelete();
+          }}
           disabled={isDeleting}
           className="absolute top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm 
                    text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 

@@ -45,8 +45,11 @@ Return JSON with:
 - professionalBackground (from data make sure to be as comprehesive as possible and include any important keywords, tools, skills, experinces in yor writing or "No background found")
 - careerHistory (from data or basic template)
 - expertiseAreas these will be used as tags so keep them to max 2 words, try to have at least 5 tags, if not enogh to do 5 its fine, but ideal is 5 to 8 (from data or ["No expertise found"])
+- citations (IMPORTANT: include the citations links verbaitum object with source names/descriptions as keys and URLs/references as values. Use any links or sources provided in the input data. If no sources are available, use an empty object {})
 
-If education or language information is found in the data, include education only if available if not skip this section (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undefined if no relevant information is found.`
+If education or language information is found in the data, include education only if available if not skip this section (array of {degree, institution, year}) and languages (array of {language, proficiency}) fields. Do not include these fields in your final output, just skip them instead of putting undefined if no relevant information is found.
+
+IMPORTANT: Make sure to include all citations and sources in the citations object. Each citation should have a descriptive name as the key and the source URL or reference as the value.`
 
     // IMPORTANT: Using o1-mini for better performance and reliability
     const completionPromise = openai.chat.completions.create({

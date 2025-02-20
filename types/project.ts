@@ -21,11 +21,12 @@ export interface PersonCard {
 }
 
 export interface Project {
-  id: string
+  id: string | number
   name: string
+  count: number
+  last_updated: string
+  created_at?: string
   description?: string
-  created_at: string
-  updated_at: string
   is_archived: boolean
   user_id?: string
 }

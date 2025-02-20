@@ -34,9 +34,9 @@ function MainContent() {
     setCurrentProject(projectName)
     // Update URL when project changes
     if (projectName) {
-      router.push(`/?project=${encodeURIComponent(projectName)}`, { scroll: false })
+      router.push(`/gallery?project=${encodeURIComponent(projectName)}`, { scroll: false })
     } else {
-      router.push('/', { scroll: false })
+      router.push('/gallery', { scroll: false })
     }
   }
 
@@ -57,7 +57,7 @@ function MainContent() {
   const handleReset = () => {
     setCards([])
     setCurrentProject('')
-    router.push('/', { scroll: false })
+    router.push('/gallery', { scroll: false })
   }
 
   return (
@@ -73,12 +73,12 @@ function MainContent() {
             </h1>
           </div>
           <div className="flex items-center gap-8">
-            <Link href="/gallery">
+            <Link href="/">
               <Button 
                 variant="ghost" 
                 className="text-[15px] font-medium text-gray-600 hover:text-blue-600 hover:bg-transparent"
               >
-                Gallery
+                Home
               </Button>
             </Link>
             <Button 
@@ -118,7 +118,7 @@ function MainContent() {
   )
 }
 
-export default function Home() {
+export default function Gallery() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#FAFAFA]">
@@ -145,4 +145,4 @@ export default function Home() {
       <MainContent />
     </Suspense>
   )
-}
+} 

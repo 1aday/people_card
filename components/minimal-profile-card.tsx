@@ -552,11 +552,11 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
           <div className="pt-3 border-t border-gray-100">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="w-full flex items-center justify-between text-xs text-gray-500 hover:text-gray-700 transition-colors group/citations"
+              className="w-full flex items-center justify-between text-xs text-gray-400 hover:text-gray-600 transition-colors group/citations py-1"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span className="font-medium">View Sources</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-400/70" />
+                <span className="font-medium">Sources & Citations</span>
               </div>
               {isExpanded ? (
                 <ChevronUp className="w-3.5 h-3.5 group-hover/citations:-translate-y-0.5 transition-transform" />
@@ -569,13 +569,24 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                 isExpanded ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'
               }`}
             >
-              <div className="space-y-2 text-xs text-gray-600">
+              <div className="space-y-2 text-xs text-gray-500">
                 {Object.entries(safeData.citations).map(([key, value], index) => (
-                  <div key={index} className="flex gap-2 items-start">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0 opacity-60" />
+                  <div key={index} className="flex gap-2 items-start group/citation hover:text-gray-600 transition-colors">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400/40 mt-1.5 flex-shrink-0 group-hover/citation:bg-amber-400/60 transition-colors" />
                     <div>
-                      <span className="font-medium text-gray-700">{key}:</span>
-                      <p className="mt-0.5 leading-relaxed">{value}</p>
+                      <span className="font-medium text-gray-600 group-hover/citation:text-gray-700">{key}:</span>
+                      {value.startsWith('http') ? (
+                        <a 
+                          href={value} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="block mt-0.5 leading-relaxed text-blue-500 hover:text-blue-600 hover:underline"
+                        >
+                          {value}
+                        </a>
+                      ) : (
+                        <p className="mt-0.5 leading-relaxed">{value}</p>
+                      )}
                     </div>
                   </div>
                 ))}

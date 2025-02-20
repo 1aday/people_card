@@ -24,8 +24,9 @@ export interface PerplexityResponse {
     highlights: string[]
   }[]
   expertiseAreas: string[]
+  citations: Record<string, string>
   openai?: OpenAIResponse | null
-  [key: string]: string | string[] | { title: string; company: string; duration: string; highlights: string[]; }[] | OpenAIResponse | null | undefined
+  [key: string]: string | string[] | { title: string; company: string; duration: string; highlights: string[]; }[] | OpenAIResponse | null | undefined | Record<string, string>
 }
 
 interface OpenAIResponse {
@@ -42,6 +43,7 @@ interface OpenAIResponse {
     highlights: string[]
   }[]
   expertiseAreas: string[]
+  citations: Record<string, string>
 }
 
 export interface ProcessedResults {
