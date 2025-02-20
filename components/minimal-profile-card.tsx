@@ -30,6 +30,7 @@ interface MinimalProfileCardProps {
     profile_image_options?: string[]
     professionalBackground?: string
     careerHistory?: CareerPosition[]
+    citations?: Record<string, string>
   }
   projectName: string
   onDelete?: () => void
@@ -166,34 +167,34 @@ export function MinimalProfileCardContainer({
       />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCards.map((entry) => (
-          <MinimalProfileCard
-            key={entry.id}
-            data={{
-              id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
-              name: entry.name,
-              profilePhoto: entry.profileImage || entry.combinedData.profilePhoto || '',
-              linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
-              currentRole: entry.combinedData.currentRole || '',
-              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
-              company: entry.company,
-              keyAchievements: entry.combinedData.keyAchievements || [],
-              expertiseAreas: entry.combinedData.expertiseAreas || [],
-              profile_image_options: entry.profileImageOptions || [],
-              professionalBackground: entry.combinedData.professionalBackground,
-              careerHistory: entry.combinedData.careerHistory
-            }}
-            projectName={projectName}
-            onDelete={() => onDelete?.(entry.id)}
-            onImageSelect={(imageUrl) => onImageSelect?.(entry.id, imageUrl)}
-            onTagClick={handleTagClick}
-          />
+            <MinimalProfileCard
+              key={entry.id}
+              data={{
+                id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
+                name: entry.name,
+              profilePhoto: entry.profile_photo || entry.profileImage || entry.combinedData.profilePhoto || '',
+                linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
+                currentRole: entry.combinedData.currentRole || '',
+                conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
+                keyAchievements: entry.combinedData.keyAchievements || [],
+                professionalBackground: entry.combinedData.professionalBackground || '',
+                careerHistory: entry.combinedData.careerHistory || [],
+                expertiseAreas: entry.combinedData.expertiseAreas || [],
+                profile_image_options: entry.profileImageOptions || [],
+                citations: entry.combinedData.citations || {}
+              }}
+              projectName={projectName}
+              onDelete={() => onDelete?.(entry.id)}
+              onImageSelect={(imageUrl) => onImageSelect?.(entry.id, imageUrl)}
+              onTagClick={handleTagClick}
+            />
         ))}
+        {filteredCards.length === 0 && (
+          <div className="col-span-full text-center py-8 text-gray-500">
+            No cards match your search criteria
+          </div>
+        )}
       </div>
-      {filteredCards.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No cards match your search criteria
-        </div>
-      )}
     </div>
   )
 }
@@ -206,17 +207,64 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
   const [showAllAchievements, setShowAllAchievements] = useState(false)
   const [showAllHistory, setShowAllHistory] = useState(false)
   const [showFullBackground, setShowFullBackground] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  // Ensure we have valid data with proper fallbacks
+  const safeData = {
+    ...data,
+    name: data.name || 'Unknown Name',
+    profilePhoto: data.profilePhoto || '',
+    linkedinURL: data.linkedinURL || '',
+    currentRole: data.currentRole || 'Unknown Role',
+    conciseRole: data.conciseRole || data.currentRole || 'Unknown Role',
+    keyAchievements: Array.isArray(data.keyAchievements) ? data.keyAchievements : [],
+    expertiseAreas: Array.isArray(data.expertiseAreas) ? data.expertiseAreas : [],
+    professionalBackground: data.professionalBackground || '',
+    careerHistory: Array.isArray(data.careerHistory) ? data.careerHistory : [],
+    profile_image_options: Array.isArray(data.profile_image_options) ? data.profile_image_options : [],
+    citations: data.citations || {}
+  }
 
   // Randomize colors but keep them consistent for each card
   const tagColors = useMemo(() => {
-    if (!data.expertiseAreas) return [];
+    if (!safeData.expertiseAreas) return [];
     const shuffled = [...PASTEL_COLORS].sort(() => Math.random() - 0.5);
-    return data.expertiseAreas.map((_, index) => shuffled[index % shuffled.length]);
-  }, [data.expertiseAreas]);
+    return safeData.expertiseAreas.map((_, index) => shuffled[index % shuffled.length]);
+  }, [safeData.expertiseAreas]);
 
   // Use profile_image_options if available, otherwise use single profilePhoto
-  const images = data.profile_image_options?.filter(img => img && img !== '') || [data.profilePhoto].filter(img => img && img !== '');
-  const currentImage = images[currentImageIndex] || null;
+  const images = safeData.profile_image_options?.length 
+    ? safeData.profile_image_options.filter(img => img && img !== '') 
+    : [safeData.profilePhoto].filter(img => img && img !== '')
+  const currentImage = images[currentImageIndex] || null
+
+  // Generate initials for the fallback
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Generate a consistent background gradient based on name
+  const getGradientColors = (name: string) => {
+    const colors = [
+      ['from-blue-400/90 to-indigo-400/90', 'ring-blue-400/30'],
+      ['from-emerald-400/90 to-teal-400/90', 'ring-emerald-400/30'],
+      ['from-purple-400/90 to-fuchsia-400/90', 'ring-purple-400/30'],
+      ['from-amber-400/90 to-orange-400/90', 'ring-amber-400/30'],
+      ['from-rose-400/90 to-pink-400/90', 'ring-rose-400/30'],
+      ['from-cyan-400/90 to-sky-400/90', 'ring-cyan-400/30'],
+    ];
+    
+    // Use name to consistently select the same gradient
+    const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    return colors[index];
+  };
+
+  const [gradientClasses, ringClass] = getGradientColors(safeData.name);
 
   const handleDelete = async () => {
     if (!projectName || !data.id) {
@@ -274,21 +322,28 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {currentImage ? (
+            {currentImage && !imageError ? (
               <Image
                 src={currentImage}
-                alt={`${data.name}'s profile`}
+                alt={`${safeData.name}'s profile`}
                 width={128}
                 height={128}
                 className="rounded-lg object-cover w-full h-full shadow-sm"
+                onError={() => setImageError(true)}
                 unoptimized
               />
             ) : (
-              <div className="w-full h-full rounded-lg bg-gray-100 flex items-center justify-center shadow-sm">
-                <span className="text-gray-400 text-sm">No Image</span>
+              <div 
+                className={`w-full h-full rounded-lg bg-gradient-to-br ${gradientClasses} 
+                           flex items-center justify-center shadow-sm ring-1 ${ringClass}
+                           transition-all duration-300 group-hover:shadow-md`}
+              >
+                <span className="text-white text-2xl font-medium tracking-wider">
+                  {getInitials(safeData.name)}
+                </span>
               </div>
             )}
-            {isHovered && images.length > 1 && (
+            {isHovered && images.length > 1 && !imageError && (
               <div className="absolute inset-0 flex items-center justify-between bg-black bg-opacity-40 rounded-lg">
                 <button
                   type="button"
@@ -324,11 +379,11 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
               <div className="space-y-2.5 min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-base capitalize truncate leading-tight">
-                    {data.name}
+                    {safeData.name}
                   </h3>
-                  {data.linkedinURL && data.linkedinURL !== 'Not found' && (
+                  {safeData.linkedinURL && safeData.linkedinURL !== 'Not found' && (
                     <a
-                      href={data.linkedinURL}
+                      href={safeData.linkedinURL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50 transition-colors"
@@ -338,23 +393,23 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                     </a>
                   )}
                 </div>
-                {data.careerHistory && data.careerHistory.length > 0 && (
+                {safeData.careerHistory && safeData.careerHistory.length > 0 && (
                   <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                     <Briefcase className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-700 truncate">{data.careerHistory[0].title}</p>
+                      <p className="font-medium text-gray-700 truncate">{safeData.careerHistory[0].title}</p>
                       <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <span className="truncate">{data.careerHistory[0].company}</span>
+                        <span className="truncate">{safeData.careerHistory[0].company}</span>
                         <span className="text-gray-300 flex-shrink-0">•</span>
-                        <span className="text-gray-400 flex-shrink-0">{data.careerHistory[0].duration}</span>
+                        <span className="text-gray-400 flex-shrink-0">{safeData.careerHistory[0].duration}</span>
                       </div>
                     </div>
                   </div>
                 )}
                 {/* Expertise Tags */}
-                {data.expertiseAreas && data.expertiseAreas.length > 0 && (
+                {safeData.expertiseAreas && safeData.expertiseAreas.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {data.expertiseAreas.map((area, index) => (
+                    {safeData.expertiseAreas.map((area, index) => (
                       <Badge 
                         key={index} 
                         variant="secondary" 
@@ -372,21 +427,21 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
         </div>
 
         {/* Middle Section: Key Achievements */}
-        {data.keyAchievements && data.keyAchievements.length > 0 && (
+        {safeData.keyAchievements && safeData.keyAchievements.length > 0 && (
           <div className="pt-3 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <Award className="w-4 h-4 text-blue-500" />
               <h4 className="text-sm font-medium text-gray-700">Key Achievements</h4>
             </div>
             <div className="space-y-1.5">
-              {data.keyAchievements.slice(0, showAllAchievements ? undefined : 3).map((achievement, index) => (
+              {safeData.keyAchievements.slice(0, showAllAchievements ? undefined : 3).map((achievement, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 opacity-60" />
                   <p className="text-xs text-gray-600 leading-relaxed">{achievement}</p>
                 </div>
               ))}
             </div>
-            {data.keyAchievements.length > 3 && (
+            {safeData.keyAchievements.length > 3 && (
               <button
                 onClick={() => setShowAllAchievements(!showAllAchievements)}
                 className="text-xs text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5 group/btn"
@@ -398,7 +453,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                   </>
                 ) : (
                   <>
-                    Show {data.keyAchievements.length - 3} more achievements
+                    Show {safeData.keyAchievements.length - 3} more achievements
                     <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
                   </>
                 )}
@@ -408,14 +463,14 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
         )}
 
         {/* Career History Section */}
-        {data.careerHistory && data.careerHistory.length > 0 && (
+        {safeData.careerHistory && safeData.careerHistory.length > 0 && (
           <div className="pt-3 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <GraduationCap className="w-4 h-4 text-purple-500" />
               <h4 className="text-sm font-medium text-gray-700">Career Journey</h4>
             </div>
             <div className="space-y-2.5">
-              {data.careerHistory.slice(0, showAllHistory ? undefined : 1).map((position, index) => (
+              {safeData.careerHistory.slice(0, showAllHistory ? undefined : 1).map((position, index) => (
                 <div key={index} className="space-y-1">
                   <div className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 flex-shrink-0 opacity-60" />
@@ -440,7 +495,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                 </div>
               ))}
             </div>
-            {data.careerHistory.length > 1 && (
+            {safeData.careerHistory.length > 1 && (
               <button
                 onClick={() => setShowAllHistory(!showAllHistory)}
                 className="text-xs text-blue-600 hover:text-blue-700 mt-2 flex items-center gap-0.5 group/btn"
@@ -452,7 +507,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                   </>
                 ) : (
                   <>
-                    Show {data.careerHistory.length - 1} more positions
+                    Show {safeData.careerHistory.length - 1} more positions
                     <ChevronDown className="w-3 h-3 group-hover/btn:translate-y-0.5 transition-transform" />
                   </>
                 )}
@@ -462,7 +517,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
         )}
 
         {/* Professional Background Section */}
-        {data.professionalBackground && (
+        {safeData.professionalBackground && (
           <div className="pt-3 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <Briefcase className="w-4 h-4 text-emerald-500" />
@@ -470,7 +525,7 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
             </div>
             <div>
               <p className={`text-xs text-gray-600 leading-relaxed ${!showFullBackground ? "line-clamp-2" : ""}`}>
-                {data.professionalBackground}
+                {safeData.professionalBackground}
               </p>
               <button
                 onClick={() => setShowFullBackground(!showFullBackground)}
@@ -488,6 +543,43 @@ export function MinimalProfileCard({ data, projectName, onDelete, onImageSelect,
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Citations Drawer */}
+        {safeData.citations && Object.keys(safeData.citations).length > 0 && (
+          <div className="pt-3 border-t border-gray-100">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="w-full flex items-center justify-between text-xs text-gray-500 hover:text-gray-700 transition-colors group/citations"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span className="font-medium">View Sources</span>
+              </div>
+              {isExpanded ? (
+                <ChevronUp className="w-3.5 h-3.5 group-hover/citations:-translate-y-0.5 transition-transform" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 group-hover/citations:translate-y-0.5 transition-transform" />
+              )}
+            </button>
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isExpanded ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <div className="space-y-2 text-xs text-gray-600">
+                {Object.entries(safeData.citations).map(([key, value], index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0 opacity-60" />
+                    <div>
+                      <span className="font-medium text-gray-700">{key}:</span>
+                      <p className="mt-0.5 leading-relaxed">{value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

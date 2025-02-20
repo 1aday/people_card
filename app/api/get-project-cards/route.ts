@@ -53,7 +53,8 @@ export async function GET(request: Request) {
         professional_background,
         career_history,
         expertise_areas,
-        profile_image_options
+        profile_image_options,
+        citations
       `)
       .eq('project_name', projectName)
       .order('created_at', { ascending: true })
@@ -101,11 +102,12 @@ export async function GET(request: Request) {
         professional_background: card.professional_background || 'No background information available',
         career_history: careerHistory,
         expertise_areas: parseJsonField(card.expertise_areas, ['No expertise areas listed']),
-        profile_image_options: profileImageOptions
+        profile_image_options: profileImageOptions,
+        citations: card.citations || null
       };
     });
 
-    return NextResponse.json(formattedCards)
+    return NextResponse.json({ cards: formattedCards })
   } catch (error) {
     console.error('Error fetching project cards:', error)
     return NextResponse.json(

@@ -24,15 +24,16 @@ interface DatabaseCard {
   linkedin_url: string
   current_position: string
   concise_role: string | null
-  key_achievements: string[]
+  key_achievements: string[] | null
   professional_background: string
   career_history: {
     title: string
     company: string
     duration: string
     highlights: string[]
-  }[]
-  expertise_areas: string[]
+  }[] | null
+  expertise_areas: string[] | null
+  citations: Record<string, string> | null
 }
 
 function MainContent() {
@@ -79,20 +80,27 @@ function MainContent() {
         const response = await fetch(`/api/get-project-cards?project_name=${encodeURIComponent(selectedProject)}`)
         if (!response.ok) throw new Error('Failed to fetch cards')
         const data = await response.json()
-        setCards(data.map((card: DatabaseCard) => ({
+        if (!data.cards) {
+          console.error('Invalid data structure received:', data)
+          toast.error('Invalid data structure received from server')
+          return
+        }
+        setCards(data.cards.map((card: DatabaseCard) => ({
           id: card.id,
           name: card.name,
           profilePhoto: card.profile_photo,
           linkedinURL: card.linkedin_url,
           currentRole: card.current_position,
           conciseRole: card.concise_role || card.current_position,
-          keyAchievements: card.key_achievements,
+          keyAchievements: Array.isArray(card.key_achievements) ? card.key_achievements : [],
           professionalBackground: card.professional_background,
-          careerHistory: card.career_history,
-          expertiseAreas: card.expertise_areas
+          careerHistory: Array.isArray(card.career_history) ? card.career_history : [],
+          expertiseAreas: Array.isArray(card.expertise_areas) ? card.expertise_areas : [],
+          citations: card.citations || {}
         })))
       } catch (error) {
         console.error('Error loading cards:', error)
+        toast.error('Failed to load cards')
       } finally {
         setLoading(false)
       }

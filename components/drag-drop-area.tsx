@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Card } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -14,7 +14,8 @@ import {
   LayoutGrid,
   LayoutList,
   Edit as EditIcon,
-  Check
+  Check,
+  Upload
 } from "lucide-react"
 import React from "react"
 import { ProfileCard } from "./profile-card"
@@ -23,9 +24,10 @@ import { SerperOrganicResult, PerplexityResponse } from '../types/api'
 import { PersonCard } from '@/types/project'
 import Image from 'next/image'
 import { MinimalProfileCard } from "./minimal-profile-card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from 'sonner'
 import { ProjectSelector } from "./project-selector"
+import { NiceCard } from "@/components/nice-card"
 
 // Define SerperImageResult type
 interface SerperImageResult {
@@ -80,6 +82,7 @@ interface Entry {
   result?: string | null
   perplexityResult?: PerplexityResponse | null
   profileImage?: string | null
+  profile_photo?: string | null  // Add this field to match database
   profileImageOptions?: string[]
   selectedImageIndex?: number
   linkedinUrl?: string | null
@@ -108,6 +111,7 @@ interface Entry {
       language: string
       proficiency: string
     }[]
+    citations?: Record<string, string>
   } | null
   status: {
     rocketreach: 'pending' | 'processing' | 'completed' | 'error'
@@ -277,7 +281,7 @@ export default function DragDropArea({
         console.log('Received project data:', data);
 
         // Validate data structure
-        if (!data || !Array.isArray(data.cards)) {
+        if (!data || !data.cards || !Array.isArray(data.cards)) {
           console.error('Invalid data structure received:', data);
           toast.error('Invalid data structure received from server');
           return;
@@ -288,6 +292,7 @@ export default function DragDropArea({
           name: card.name,
           company: card.company || '',
           profileImage: card.profile_photo,
+          profile_photo: card.profile_photo,  // Add this field
           linkedinUrl: card.linkedin_url,
           databaseId: card.id.toString(),
           saved: true,
@@ -295,7 +300,7 @@ export default function DragDropArea({
             name: card.name,
             profilePhoto: card.profile_photo,
             linkedinURL: card.linkedin_url,
-            currentRole: card.current_role,
+            currentRole: card.current_position,
             conciseRole: card.concise_role,
             keyAchievements: card.key_achievements || [],
             professionalBackground: card.professional_background || '',
@@ -2177,101 +2182,83 @@ export default function DragDropArea({
 
               <TabsContent value="minimal" className="mt-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(processedEntries.length > 0 || entriesToProcess.length > 0) ? (
-                    <>
-                      {[...processedEntries, ...entriesToProcess]
-                        .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
-                          entry.combinedData !== null && entry.combinedData !== undefined
-                        )
-                        .map((entry) => (
-                          <MinimalProfileCard 
-                            key={entry.id}
-                            data={{
-                              id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
-                              name: entry.name,
-                              profilePhoto: entry.profileImage || entry.combinedData.profilePhoto || '',
-                              linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
-                              currentRole: entry.combinedData.currentRole || '',
-                              conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
-                              company: entry.company,
-                              keyAchievements: entry.combinedData.keyAchievements || [],
-                              expertiseAreas: entry.combinedData.expertiseAreas || [],
-                              profile_image_options: entry.profileImageOptions || []
-                            }}
-                            projectName={projectName || ''}
-                            onDelete={() => {
-                              if (processedEntries.find(e => e.id === entry.id)) {
-                                setProcessedEntries(current =>
-                                  current.filter(e => e.id !== entry.id)
-                                )
-                              } else {
-                                setEntriesToProcess(current =>
-                                  current.filter(e => e.id !== entry.id)
-                                )
-                              }
-                            }}
-                            onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
-                          />
-                        ))}
-                    </>
-                  ) : (
-                    projectName && !isLoadingProject && (
-                      <div className="col-span-full text-center py-8 text-gray-500">
-                        No cards found in this project
-                      </div>
+                  {[...processedEntries, ...entriesToProcess]
+                    .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
+                      entry.combinedData !== null && entry.combinedData !== undefined
                     )
-                  )}
+                    .map((entry) => (
+                      <MinimalProfileCard 
+                        key={entry.id}
+                        data={{
+                          id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
+                          name: entry.name,
+                          profilePhoto: entry.profile_photo || entry.profileImage || entry.combinedData.profilePhoto || '',
+                          linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
+                          currentRole: entry.combinedData.currentRole || '',
+                          conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
+                          keyAchievements: entry.combinedData.keyAchievements || [],
+                          professionalBackground: entry.combinedData.professionalBackground || '',
+                          careerHistory: entry.combinedData.careerHistory || [],
+                          expertiseAreas: entry.combinedData.expertiseAreas || [],
+                          profile_image_options: entry.profileImageOptions || [],
+                          citations: entry.combinedData.citations || {}
+                        }}
+                        projectName={projectName || ''}
+                        onDelete={() => {
+                          if (processedEntries.find(e => e.id === entry.id)) {
+                            setProcessedEntries(current =>
+                              current.filter(e => e.id !== entry.id)
+                            )
+                          } else {
+                            setEntriesToProcess(current =>
+                              current.filter(e => e.id !== entry.id)
+                            )
+                          }
+                        }}
+                        onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
+                      />
+                    ))}
                 </div>
               </TabsContent>
 
               <TabsContent value="expanded" className="mt-0">
                 <div className="grid grid-cols-1 gap-8">
-                  {(processedEntries.length > 0 || entriesToProcess.length > 0) ? (
-                    <>
-                      {processedEntries
-                        .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
-                          entry.combinedData !== null && entry.combinedData !== undefined
-                        )
-                        .map((entry) => (
-                          <div key={entry.id} className="w-full relative">
-                            {entry.imageSelectionFeedback && (
-                              <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
-                                Profile image updated ✓
-                              </div>
-                            )}
-                            <ProfileCard 
-                              data={entry.combinedData}
-                              imageOptions={entry.profileImageOptions}
-                              onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
-                            />
-                          </div>
-                        ))}
-                      {entriesToProcess
-                        .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
-                          entry.combinedData !== null && entry.combinedData !== undefined
-                        )
-                        .map((entry) => (
-                          <div key={entry.id} className="w-full relative">
-                            {entry.imageSelectionFeedback && (
-                              <div className="absolute top-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-sm transition-opacity duration-200 ease-in-out">
-                                Profile image updated ✓
-                              </div>
-                            )}
-                            <ProfileCard 
-                              data={entry.combinedData}
-                              imageOptions={entry.profileImageOptions}
-                              onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
-                            />
-                          </div>
-                        ))}
-                    </>
-                  ) : (
-                    projectName && !isLoadingProject && (
-                      <div className="text-center py-8 text-gray-500">
-                        No cards found in this project
-                      </div>
+                  {[...processedEntries, ...entriesToProcess]
+                    .filter((entry): entry is Entry & { combinedData: NonNullable<Entry['combinedData']> } => 
+                      entry.combinedData !== null && entry.combinedData !== undefined
                     )
-                  )}
+                    .map((entry) => (
+                      <NiceCard
+                        key={entry.id}
+                        data={{
+                          id: entry.databaseId ? parseInt(entry.databaseId.toString()) : undefined,
+                          name: entry.name,
+                          profilePhoto: entry.profile_photo || entry.profileImage || entry.combinedData.profilePhoto || '',
+                          linkedinURL: entry.linkedinUrl || entry.combinedData.linkedinURL || '',
+                          currentRole: entry.combinedData.currentRole || '',
+                          conciseRole: entry.combinedData.conciseRole || entry.combinedData.currentRole || '',
+                          keyAchievements: entry.combinedData.keyAchievements || [],
+                          professionalBackground: entry.combinedData.professionalBackground || '',
+                          careerHistory: entry.combinedData.careerHistory || [],
+                          expertiseAreas: entry.combinedData.expertiseAreas || [],
+                          profile_image_options: entry.profileImageOptions || [],
+                          citations: entry.combinedData.citations || {}
+                        }}
+                        projectName={projectName || ''}
+                        onDelete={() => {
+                          if (processedEntries.find(e => e.id === entry.id)) {
+                            setProcessedEntries(current =>
+                              current.filter(e => e.id !== entry.id)
+                            )
+                          } else {
+                            setEntriesToProcess(current =>
+                              current.filter(e => e.id !== entry.id)
+                            )
+                          }
+                        }}
+                        onImageSelect={(imageUrl) => handleImageSelect(entry.id, imageUrl)}
+                      />
+                    ))}
                 </div>
               </TabsContent>
 

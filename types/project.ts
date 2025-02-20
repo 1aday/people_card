@@ -17,6 +17,7 @@ export interface PersonCard {
   careerHistory: CareerHistoryEntry[]
   expertiseAreas: string[]
   profile_image_options?: string[]  // Add profile image options array
+  citations?: Record<string, string>  // Changed from string[] to Record<string, string>
 }
 
 export interface Project {
